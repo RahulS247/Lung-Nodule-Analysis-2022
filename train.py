@@ -5,8 +5,11 @@ from enum import Enum, unique
 import numpy as np
 import matplotlib.pyplot as plt
 
-import tensorflow.keras
-from tensorflow.keras import Sequential
+
+import tensorflow
+from tensorflow import keras
+from tensorflow.keras import layers
+
 from tensorflow.keras.applications import VGG16, ResNet50
 from tensorflow.keras.optimizers import SGD
 from tensorflow.keras.losses import categorical_crossentropy
@@ -18,8 +21,6 @@ from utils import maybe_download_vgg16_pretrained_weights
 
 import click
 
-
-import tensorflow as tf
 
 
 @click.command()
@@ -99,13 +100,13 @@ def main(
     early_stop_delta: float,
     
 ):
-
-
-    print('Num GPUs Available: ', len(tf.config.list_physical_devices('GPU')))
+    tensorflow.random.set_seed(42)
+    np.random.seed(42)
     # Enforce some Keras backend settings that we need
     tensorflow.keras.backend.set_image_data_format("channels_first")
     tensorflow.keras.backend.set_floatx("float32")
-
+    print("num GPU's Available:", len(tensorflow.config.list_physical_devices('GPU')))
+    print(tensorflow.config.list_physical_devices('GPU'))
 
     # This should point at the directory containing the source LUNA22 prequel dataset
     DATA_DIRECTORY = raw_data_dir#Path().absolute() / "LUNA22 prequel"
@@ -278,10 +279,10 @@ def main(
         batch_size=batch_size,
     )
 
-
-
-    # We use the VGG16 model
-    res_model = ResNet50(
+    # Define model
+    ## We use the VGG16 model
+    ## Base model
+    base_model = ResNet50(
         include_top=False,
         weights="imagenet",
         input_tensor=None,
@@ -290,11 +291,13 @@ def main(
         classes=num_classes,
         classifier_activation=None,
     )
-    model = Sequential()
-    for layer in res_model.layers:
-        model.add(layer)
-    model.add(Dense(1024, activation='relu'))
-    model.add(Dense(num_classes, activation='sigmoid'))
+    
+    ## Extended part
+    x = layers.Flatten()(base_model.output)
+    x = layers.Dense(1024, activation='relu')(x)
+    o = layers.Dense(num_classes, activation='sigmoid')(x)
+
+    model = keras.Model(inputs=base_model.input, outputs=o)
 
     # Show the model layers
     print(model.summary())
