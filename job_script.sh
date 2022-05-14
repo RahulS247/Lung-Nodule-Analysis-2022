@@ -43,7 +43,7 @@ USER_DIR_NAME="LNA22_t"
 in_dir="$TMPDIR"/LunaDataFolder/in_dir
 mkdir -p $in_dir
 # We don't have to change the data. Therfore we dont need to have in the git nore in every project folder. One Static location is entought I Think
-cp -R /gpfs/home3/dbalsameda/Data/LUNA22_prequel/ "$in_dir"
+cp -R "$HOME"/Data/LUNA22_prequel/ "$in_dir"
 #Create output directory on scratch
 mkdir "$TMPDIR"/"$USER_DIR_NAME"/gen_data_dir
 mkdir "$TMPDIR"/"$USER_DIR_NAME"/output_dir
