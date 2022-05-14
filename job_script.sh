@@ -25,13 +25,13 @@ echo "start"
 section="Loading python"
 #https://servicedesk.surf.nl/wiki/display/WIKI/Loading+modules
 module load 2021 # Why do we need this?
-module load TensorFlow #Python/3.9.5-GCCcore-10.3.0 # load python
+module load TensorFlow/2.6.0-foss-2021a-CUDA-11.3.1 #Python/3.9.5-GCCcore-10.3.0 # load python
 #makes sure the requiret packages are installed
-pip install --user SimpleITK --quiet
-pip install --user numpy --quiet
-pip install --user matplotlib --quiet
-pip install --user tensorflow --quiet
-pip install --user pathlib --quiet
+#pip install --user SimpleITK --quiet
+#pip install --user numpy --quiet
+#pip install --user matplotlib --quiet
+#pip install --user tensorflow --quiet
+#pip install --user pathlib --quiet
 ##TODO load the requirement.txt file instead
 echo_status
 
@@ -40,7 +40,7 @@ echo_status
 #Copy input file to scratch
 section="copying the Dataset"
 USER_DIR_NAME="LNA22_t"
-in_dir="$TMPDIR"/LunaDataFolder/in_dir
+in_dir="$TMPDIR"/"$USER_DIR_NAME"/LunaDataFolder/in_dir
 mkdir -p $in_dir
 # We don't have to change the data. Therfore we dont need to have in the git nore in every project folder. One Static location is entought I Think
 cp -R "$HOME"/Data/LUNA22_prequel/ "$in_dir"
