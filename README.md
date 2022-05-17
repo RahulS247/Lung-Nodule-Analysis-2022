@@ -10,3 +10,8 @@ To train the algorithm, just execute the following script:
 ```bash
 python train.py
 ```
+## Train on Snellinus
+sbatch job_script.sh
+
+## How to monitor 
+after running the job_script a `slurm-<jobnuber>.out` is generated.
