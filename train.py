@@ -138,7 +138,7 @@ def main(
         generate_if_not_present=True,
         always_generate=True,
         source_data_dir=DATA_DIRECTORY,
-        generated_data_dir=GENERATED_DATA_DIRECTORY,
+        generated_data_dir=GENERATED_DATA_DIRECTORY, #Why isnt it loaded???
     )
     inputs = full_dataset["inputs"]
 
@@ -282,22 +282,17 @@ def main(
     # Define model
     ## We use the VGG16 model
     ## Base model
-    base_model = ResNet50(
-        include_top=False,
-        weights="imagenet",
-        input_tensor=None,
-        input_shape=None,
-        pooling="avg",
-        classes=num_classes,
-        classifier_activation=None,
-    )
-    
-    ## Extended part
-    x = layers.Flatten()(base_model.output)
-    x = layers.Dense(1024, activation='relu')(x)
-    o = layers.Dense(num_classes, activation='sigmoid')(x)
+    model = VGG16(
+            include_top=True,
+            weights=None,
+            input_tensor=None,
+            input_shape=None,
+            pooling=None,
+            classes=num_classes,
+            classifier_activation="softmax",
+        )
 
-    model = keras.Model(inputs=base_model.input, outputs=o)
+    #model = keras.Model(inputs=base_model.input, outputs=o)
 
     # Show the model layers
     print(model.summary())
