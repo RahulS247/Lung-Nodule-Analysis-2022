@@ -43,17 +43,25 @@ USER_DIR_NAME="LNA22_t"
 in_dir="$TMPDIR"/"$USER_DIR_NAME"/LunaDataFolder/in_dir
 mkdir -p $in_dir
 # We don't have to change the data. Therfore we dont need to have in the git nore in every project folder. One Static location is entought I Think
-cp -R "$HOME"/Data/LUNA22_prequel/ "$in_dir"
+#this line copys the original dataset
+ cp -R "$HOME"/Data/LUNA22_prequel/ "$in_dir"
 #Create output directory on scratch
-mkdir "$TMPDIR"/"$USER_DIR_NAME"/gen_data_dir
+gen_dir="$TMPDIR"/"$USER_DIR_NAME"/gen_data_dir
+mkdir -p $gen_dir
 mkdir "$TMPDIR"/"$USER_DIR_NAME"/output_dir
+cp -a "$HOME"/Data/gen_data_dir/. "$gen_dir"
+
+#cp  "$HOME"/Data/gen_dat_dir/train_input_data_224_0.2_cso.npz "$TMPDIR"/"$USER_DIR_NAME"/gen_data_dir/train_input_data_224_0.2_cso.npz
+
 echo_status
 echo $'\n\n------------------------\n'
 
 
 section="Run code\n"
 #Execute a Python program located in $HOME, that takes an input file and output directory as arguments.
-python "$PWD"/train.py --raw_data_dir "$in_dir"/LUNA22_prequel --out_dir "$TMPDIR"/"$USER_DIR_NAME"/output_dir --gen_data_dir "$TMPDIR"/"$USER_DIR_NAME"/gen_data_dir --problem malignancy --epochs 1
+#python "$PWD"/train.py --raw_data_dir "$in_dir"/LUNA22_prequel --out_dir "$TMPDIR"/"$USER_DIR_NAME"/output_dir --gen_data_dir "$gen_dir" --problem malignancy --data_part "slices" --base_model_name "ResNet50" --epochs 255 --problem "noduletype"
+#
+python "$PWD"/train.py --raw_data_dir "$in_dir"/LUNA22_prequel --out_dir "$TMPDIR"/"$USER_DIR_NAME"/output_dir --gen_data_dir "$gen_dir" --problem malignancy   --existing_dir "/home/dbalsameda/Gabriel/Collection/result/output_dir" --all_combinations 
 
 echo_status
 
@@ -62,6 +70,6 @@ section="save output to $PWD"
 mkdir -p "$PWD"/result/output_dir
 mkdir -p "$PWD"/result/gen_data_dir
 
-cp -r "$TMPDIR"/"$USER_DIR_NAME"/output_dir "$PWD"/result/output_dir
-cp -r "$TMPDIR"/"$USER_DIR_NAME"/gen_data_dir "$PWD"/result/gen_data_dir
+cp -r "$TMPDIR"/"$USER_DIR_NAME"/output_dir/. "$PWD"/result/output_dir
+cp -r "$TMPDIR"/"$USER_DIR_NAME"/gen_data_dir/. "$PWD"/result/gen_data_dir
 echo_status

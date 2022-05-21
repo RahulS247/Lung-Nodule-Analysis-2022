@@ -10,7 +10,7 @@ import tensorflow
 from tensorflow import keras
 from tensorflow.keras import layers
 
-from tensorflow.keras.applications import VGG16, ResNet50
+from tensorflow.keras.applications import VGG16, ResNet50, ResNet101, ResNet152 
 from tensorflow.keras.optimizers import SGD
 from tensorflow.keras.losses import categorical_crossentropy
 from tensorflow.keras.callbacks import ModelCheckpoint, EarlyStopping, TerminateOnNaN
@@ -19,9 +19,16 @@ from balanced_sampler import sample_balanced, UndersamplingIterator
 from data import load_dataset
 from utils import maybe_download_vgg16_pretrained_weights
 
+import os
+import itertools
+import json
+
 import click
 
 
+data_part_options = ["slices", 'full']
+base_model_options = ["vgg16","ResNet152","ResNet101","ResNet50"]
+problem_options = ['malignancy', 'noduletype']
 
 @click.command()
 @click.option(
@@ -43,6 +50,13 @@ import click
     help="path to root folder for the output files",
 )
 @click.option(
+    "--existing_dir",
+    type=pathlib.Path,
+    default="",
+    help="check if this training combination in path allready exist in this path",
+)
+
+@click.option(
     "--input_size",
     type=int,
     default=224,
@@ -55,11 +69,19 @@ import click
     help="The batch size for the malignancy prediction",
 )
 @click.option(
-    "--base_model",
-    type=str,
-    default="vgg16",
+    "--base_model_name",
+    type=click.Choice(base_model_options),
+    default=base_model_options[0],
     help="The pretrained base model of the network",
 )
+#cross_slices_only#fully
+@click.option(
+    "--data_part",
+    type=click.Choice(data_part_options),
+    default="slices",
+    help="The pretrained base model of the network",
+)
+
 @click.option(
     "--val_fraciton",
     type=float,
@@ -67,7 +89,7 @@ import click
     help="The train val split fraction",
 )
 @click.option('--problem',
-              type=click.Choice(['malignancy', 'noduletype'], case_sensitive=True),
+              type=click.Choice(problem_options, case_sensitive=True),
               required=True,
               help="If this run should consider maligancy or the nodule types",
               )
@@ -86,20 +108,78 @@ import click
     type=float,
     default=0,
 )
+@click.option(
+    "--early_stop_delta",
+    type=float,
+    default=0,
+)
+@click.option('--all_combinations',  is_flag=True, help="Print more output.")
+
+
+
+
+
 def main(
     raw_data_dir: pathlib.Path,
     gen_data_dir: pathlib.Path,
     out_dir: pathlib.Path,
+    existing_dir: pathlib.Path,
     input_size: int,
     batch_size: int,
-    base_model: str,
+    base_model_name: str,
+    data_part:str,
     val_fraciton: float,
     problem: str,
     learning_rate: float,
     epochs: int,
     early_stop_delta: float,
+    all_combinations:bool = False,
     
 ):
+    print("all combos: ", all_combinations)
+    if(all_combinations):
+        for i in itertools.product(base_model_options, data_part_options,[problem_options[0]]):
+            print(i)
+            #main(raw_data_dir,gen_data_dir=gen_data_dir,out_dir=out_dir,existing_dir=existing_dir,input_size=input_size,batch_size=batch_size,base_model_name=i[0],data_part=i[1],val_fraciton=val_fraciton,problem=i[2],learning_rate=learning_rate,epochs=epochs,early_stop_delta=early_stop_delta, all_combinations=False)
+            try:
+                train_and_eval_network(raw_data_dir,gen_data_dir=gen_data_dir,out_dir=out_dir,existing_dir=existing_dir,input_size=input_size,batch_size=batch_size,base_model_name=i[0],data_part=i[1],val_fraciton=val_fraciton,problem=i[2],learning_rate=learning_rate,epochs=epochs,early_stop_delta=early_stop_delta)
+            except Exception as e:
+                print("found an errror:", e)
+        
+        return
+            ##check if file_naming+"_train_plot.png" already exist
+    else:
+        train_and_eval_network(raw_data_dir,gen_data_dir=gen_data_dir,out_dir=out_dir,existing_dir=existing_dir,input_size=input_size,batch_size=batch_size,base_model_name=base_model_name,data_part=data_part,val_fraciton=val_fraciton,problem=problem,learning_rate=learning_rate,epochs=epochs,early_stop_delta=early_stop_delta)
+
+
+
+def train_and_eval_network(raw_data_dir: pathlib.Path,
+    gen_data_dir: pathlib.Path,
+    out_dir: pathlib.Path,
+    existing_dir: pathlib.Path,
+    input_size: int,
+    batch_size: int,
+    base_model_name: str,
+    data_part:str,
+    val_fraciton: float,
+    problem: str,
+    learning_rate: float,
+    epochs: int,
+    early_stop_delta: float):
+    
+    file_naming = f"{problem}_{base_model_name}_{data_part}"
+    
+    print("check if ",(existing_dir/(file_naming+"_train_plot.png")))
+    if(existing_dir):
+        if os.path.isfile((existing_dir/(file_naming+"_train_plot.png") )):
+            print("allready exist")
+            return
+        #print("check if ",(existing_dir/(file_naming+"_train_plot.png"), exist )
+    
+    #return
+
+
+
     tensorflow.random.set_seed(42)
     np.random.seed(42)
     # Enforce some Keras backend settings that we need
@@ -131,12 +211,13 @@ def main(
     # Load dataset
     # This method will generate a preprocessed dataset from the source data if it is not present (only needs to be done once)
     # Otherwise it will quickly load the generated dataset from disk
+    cross_slices_only = (data_part=="slices")
     full_dataset = load_dataset(
         input_size=input_size,#224,
         new_spacing_mm=0.2,
-        cross_slices_only=True,
+        cross_slices_only=cross_slices_only,
         generate_if_not_present=True,
-        always_generate=True,
+        always_generate=False,
         source_data_dir=DATA_DIRECTORY,
         generated_data_dir=GENERATED_DATA_DIRECTORY, #Why isnt it loaded???
     )
@@ -151,12 +232,12 @@ def main(
 
     # Here you can switch the machine learning problem to solve
     if problem == "noduletype":
-        problem = MLProblem.noduletype
+        problem =  "noduletype"#MLProblem.noduletype
     else:
-        problem = MLProblem.malignancy_prediction
+        problem = "malignancy"#MLProblem.malignancy_prediction
 
     # Configure problem specific parameters
-    if problem == MLProblem.malignancy_prediction:
+    if problem =="malignancy": #"malignancy"MLProblem.malignancy_prediction:
         # We made this problem a binary classification problem:
         # 0 - benign, 1 - malignant
         num_classes = 2
@@ -166,7 +247,7 @@ def main(
         labels = full_dataset["labels_malignancy"]
         # It is possible to generate training labels yourself using the raw annotations of the radiologists...
         labels_raw = full_dataset["labels_malignancy_raw"]
-    elif problem == MLProblem.nodule_type_prediction:
+    elif problem ==  "noduletype": # MLProblem.nodule_type_prediction:
         # We made this problem a multiclass classification problem with three classes:
         # 0 - non-solid, 1 - part-solid, 2 - solid
         num_classes = 3
@@ -263,6 +344,75 @@ def main(
         input_batch = shared_preprocess_fn(input_batch=input_batch)
         return input_batch
 
+    
+    def select_model(base_model_name):
+        if base_model_name == 'ResNet50':
+                base_model = ResNet50(
+                    include_top=False, #define the output of the last layers
+                    weights="imagenet",
+                    input_tensor=None,
+                    input_shape=None,
+                    pooling="avg",
+                    classes=num_classes,
+                    classifier_activation=None,#//softmax
+                )
+                ## Extended part
+                x = layers.Flatten()(base_model.output)
+                x = layers.Dense(1024, activation='relu')(x)
+                o = layers.Dense(num_classes, activation='sigmoid')(x)
+
+                model = keras.Model(inputs=base_model.input, outputs=o)
+                
+        if base_model_name == 'ResNet101':
+                base_model = ResNet101(
+                    include_top=False, #define the output of the last layers
+                    weights="imagenet",
+                    input_tensor=None,
+                    input_shape=None,
+                    pooling="avg",
+                    classes=num_classes,
+                    classifier_activation=None,#//softmax
+                )
+                ## Extended part
+                x = layers.Flatten()(base_model.output)
+                x = layers.Dense(1024, activation='relu')(x)
+                o = layers.Dense(num_classes, activation='sigmoid')(x)
+
+                model = keras.Model(inputs=base_model.input, outputs=o)
+        if base_model_name == 'ResNet152':
+                base_model = ResNet152(
+                    include_top=False, #define the output of the last layers
+                    weights="imagenet",
+                    input_tensor=None,
+                    input_shape=None,
+                    pooling="avg",
+                    classes=num_classes,
+                    classifier_activation=None,#//softmax
+                )
+                ## Extended part
+                x = layers.Flatten()(base_model.output)
+                x = layers.Dense(1024, activation='relu')(x)
+                o = layers.Dense(num_classes, activation='sigmoid')(x)
+
+                model = keras.Model(inputs=base_model.input, outputs=o)
+        if base_model_name == "vgg16":
+            # Define model
+            ## We use the VGG16 model
+            ## Base model
+            model = VGG16(
+                    include_top=True,
+                    weights=None,
+                    input_tensor=None,
+                    input_shape=None,
+                    pooling=None,
+                    classes=num_classes,
+                    classifier_activation="softmax",
+                )
+
+        
+
+        return model
+
 
     training_data_generator = UndersamplingIterator(
         training_inputs,
@@ -278,21 +428,13 @@ def main(
         preprocess_fn=validation_preprocess_fn,
         batch_size=batch_size,
     )
+    
 
-    # Define model
-    ## We use the VGG16 model
-    ## Base model
-    model = VGG16(
-            include_top=True,
-            weights=None,
-            input_tensor=None,
-            input_shape=None,
-            pooling=None,
-            classes=num_classes,
-            classifier_activation="softmax",
-        )
 
     #model = keras.Model(inputs=base_model.input, outputs=o)
+    model = select_model(base_model_name)
+
+    
 
     # Show the model layers
     print(model.summary())
@@ -309,10 +451,16 @@ def main(
         loss=categorical_crossentropy,
         metrics=["categorical_accuracy"],
     )
+    
+    summary = model.summary()
+    print(summary)
+
+
+
 
     # Start actual training process
     output_model_file = (
-        TRAINING_OUTPUT_DIRECTORY / f"vgg16_{problem.value}_best_val_accuracy.h5"
+        TRAINING_OUTPUT_DIRECTORY / (file_naming+"best_val_accuracy.h5")
     )
     callbacks = [
         TerminateOnNaN(),
@@ -345,9 +493,10 @@ def main(
     )
 
 
+
     # generate a plot using the training history...
     output_history_img_file = (
-        TRAINING_OUTPUT_DIRECTORY / f"vgg16_{problem.value}_train_plot.png"
+        TRAINING_OUTPUT_DIRECTORY / (file_naming+"_train_plot.png")
     )
     print(f"Saving training plot to: {output_history_img_file}")
     plt.plot(history.history["categorical_accuracy"])
@@ -359,6 +508,12 @@ def main(
     plt.xlabel("Epoch")
     plt.legend(["Accuracy", "Validation Accuracy", "loss", "Validation Loss"])
     plt.savefig(str(output_history_img_file), bbox_inches="tight")
+
+    print(history.history.keys())
+
+    output_history_file=( TRAINING_OUTPUT_DIRECTORY / (str(max(history.history['val_categorical_accuracy']))+file_naming+"_hist.json"))
+    #str(max(history.history['val_categorical_accuracy']))+
+    json.dump(history.history, open(output_history_file, 'w'), indent=4)
 
 if __name__ == "__main__":
     main()
