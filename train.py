@@ -6,8 +6,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 import tensorflow.keras
-from tensorflow.keras.applications import VGG16, EfficientNetB7
-from tensorflow.keras.optimizers import SGD
+from tensorflow.keras.applications import VGG16, EfficientNetB0
+from tensorflow.keras.optimizers import SGD, Adam
 from tensorflow.keras.losses import categorical_crossentropy
 from tensorflow.keras.callbacks import ModelCheckpoint, EarlyStopping, TerminateOnNaN
 
@@ -31,15 +31,15 @@ GENERATED_DATA_DIRECTORY = Path().absolute()
 TRAINING_OUTPUT_DIRECTORY = Path().absolute()
 
 #downloading weight efficentnet
-# model_eff = EfficientNetB7(include_top=True, weights="imagenet", input_tensor=None, input_shape=None, pooling=None, classes=1000, classifier_activation="softmax")
+# model_eff = EfficientNetB0(include_top=True, weights="imagenet", input_tensor=None, input_shape=None, pooling=None, classes=1000, classifier_activation="softmax")
 # model_eff.summary()
 
-# model_eff.save('pretrained_weights/efficientB7_weight.h5')
+# model_eff.save('pretrained_weights/efficientB0_weight.h5')
 
 PRETRAINED_efficientb7_WEIGHTS_FILE = (
     Path().absolute()
     / "pretrained_weights"
-    / "efficientB7_weight.h5"
+    / "efficientB0_weight.h5"
 )
 
 # This should point at the pretrained model weights file for the VGG16 model.
@@ -204,7 +204,7 @@ validation_data_generator = UndersamplingIterator(
 
 
 # We use the VGG16 model
-model = EfficientNetB7(
+model = EfficientNetB0(
     include_top=True,
     weights=None,
     input_tensor=None,
@@ -225,14 +225,14 @@ model.load_weights(str(PRETRAINED_efficientb7_WEIGHTS_FILE), by_name=True, skip_
 # Prepare model for training by defining the loss, optimizer, and metrics to use
 # Output labels and predictions are one-hot encoded, so we use the categorical_accuracy metric
 model.compile(
-    optimizer=SGD(learning_rate=0.0001, momentum=0.8, nesterov=True),
+    optimizer=Adam(learning_rate=0.001),
     loss=categorical_crossentropy,
     metrics=["categorical_accuracy"],
 )
 
 # Start actual training process
 output_model_file = (
-    TRAINING_OUTPUT_DIRECTORY / f"efficientb7_{problem.value}_best_val_accuracy.h5"
+    TRAINING_OUTPUT_DIRECTORY / f"efficientb0_{problem.value}_best_val_accuracy.h5"
 )
 callbacks = [
     TerminateOnNaN(),
@@ -259,7 +259,7 @@ history = model.fit(
     validation_data=validation_data_generator,
     validation_steps=None,
     validation_freq=1,
-    epochs=250,
+    epochs=150,
     callbacks=callbacks,
     verbose=2,
 )
@@ -267,7 +267,7 @@ history = model.fit(
 
 # generate a plot using the training history...
 output_history_img_file = (
-    TRAINING_OUTPUT_DIRECTORY / f"efficientb7_{problem.value}_train_plot.png"
+    TRAINING_OUTPUT_DIRECTORY / f"efficientb0_{problem.value}_train_plot.png"
 )
 print(f"Saving training plot to: {output_history_img_file}")
 plt.plot(history.history["categorical_accuracy"])
