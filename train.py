@@ -22,7 +22,7 @@ from utils import maybe_download_vgg16_pretrained_weights
 import click
 
 from models.resnet import lung_model
-
+import sklearn
 
 @click.command()
 @click.option(
@@ -180,6 +180,7 @@ def main(
         labels = full_dataset["labels_malignancy"]
         # It is possible to generate training labels yourself using the raw annotations of the radiologists...
         labels_raw = full_dataset["labels_malignancy_raw"]
+        classes_names = ["Benign", "Malignant"]
     elif problem == MLProblem.nodule_type_prediction:
         # We made this problem a multiclass classification problem with three classes:
         # 0 - non-solid, 1 - part-solid, 2 - solid
@@ -190,6 +191,7 @@ def main(
         labels = full_dataset["labels_nodule_type"]
         # It is possible to generate training labels yourself using the raw annotations of the radiologists...
         labels_raw = full_dataset["labels_nodule_type_raw"]
+        classes_names = ["Nonsolid", "PartSolid", "Solid"]
     else:
         raise NotImplementedError(f"An unknown MLProblem was specified: {problem}")
 
@@ -362,11 +364,19 @@ def main(
         callbacks=callbacks,
         verbose=2,
     )
-
+    
+    # Conf matrix
+    y_val_auto = model.predict(validation_data_generator)
+    conf_mat_nn = sklearn.metrics.confusion_matrix(labels, y_validation_auto.argmax(axis=1))
+    acc_nn = sklearn.metrics.accuracy_score(y_validation, y_validation_auto.argmax(axis=1))
+    output_conf_img_file = (
+        TRAINING_OUTPUT_DIRECTORY / f"{base_model}_{problem.value}_conf_plot.png"
+    )
+    plot_confusion_matrix(conf_mat, classes_names, output_conf_img_file)
 
     # generate a plot using the training history...
     output_history_img_file = (
-        TRAINING_OUTPUT_DIRECTORY / f"vgg16_{problem.value}_train_plot.png"
+        TRAINING_OUTPUT_DIRECTORY / f"{base_model}_{problem.value}_train_plot.png"
     )
     print(f"Saving training plot to: {output_history_img_file}")
     plt.plot(history.history["categorical_accuracy"])
@@ -381,6 +391,27 @@ def main(
 
 def get_model_name(fold_var, problem, base_model):
     return f"{base_model}_{problem.value}_{str(fold_var)}_best_vall_acc.h5"
+
+def plot_confusion_matrix(conf_mat, classes, outfile,title='Confusion Matrix', cmap=plt.cm.Blues,):
+    """
+    This function prints and plots the confusion matrix
+    """
+    plt.imshow(conf_mat, interpolation='nearest', cmap=cmap)
+    plt.title(title)
+    plt.colorbar()
+    tick_marks = np.arange(len(classes))
+    plt.xticks(tick_marks, classes, rotation=90)
+    plt.yticks(tick_marks, classes)
+
+    thresh = conf_mat.max() / 2.
+    for i, j in itertools.product(range(conf_mat.shape[0]), range(conf_mat.shape[1])):
+        plt.text(j, i, conf_mat[i, j], horizontalalignment="center",
+                 color="white" if conf_mat[i, j] > thresh else "black")
+
+    plt.tight_layout()
+    plt.ylabel('True label')
+    plt.xlabel('Predicted label')
+    plt.savefig(str(outfile), bbox_inches="tight")
 
 if __name__ == "__main__":
     main()
