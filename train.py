@@ -1,3 +1,4 @@
+import pathlib
 from pathlib import Path
 from typing import Tuple
 from enum import Enum, unique
@@ -5,10 +6,13 @@ from enum import Enum, unique
 import numpy as np
 import matplotlib.pyplot as plt
 
-import tensorflow.keras
+import tensorflow
+from tensorflow import keras
+from tensorflow.keras import layers
+from ternsorflow.keras import optimizers
+from ternsorflow.keras import losses
+
 from tensorflow.keras.applications import VGG16, ResNet50
-from tensorflow.keras.optimizers import SGD
-from tensorflow.keras.losses import categorical_crossentropy
 from tensorflow.keras.callbacks import ModelCheckpoint, EarlyStopping, TerminateOnNaN
 
 from balanced_sampler import sample_balanced, UndersamplingIterator
@@ -17,6 +21,7 @@ from utils import maybe_download_vgg16_pretrained_weights
 
 import click
 
+from models.resnet import lung_model
 
 
 @click.command()
@@ -65,7 +70,7 @@ import click
 @click.option('--problem',
               type=click.Choice(['malignancy', 'noduletype'], case_sensitive=True),
               required=True,
-              help="If this run should cunsider maligancy or the nodule types",
+              help="If this run should consider maligancy or the nodule types",
               )
 @click.option(
     "--learning_rate",
@@ -82,6 +87,16 @@ import click
     type=float,
     default=0,
 )
+@click.option(
+    "--kfolds",
+    type=int,
+    default=1,
+)
+@click.option(
+    "--stratified",
+    type=bool,
+    default=False
+)
 def main(
     raw_data_dir: pathlib.Path,
     gen_data_dir: pathlib.Path,
@@ -94,12 +109,17 @@ def main(
     learning_rate: float,
     epochs: int,
     early_stop_delta: float,
+    kfolds: int,
+    stratified: bool
     
 ):
+    tensorflow.random.set_seed(42)
+    np.random.seed(42)
     # Enforce some Keras backend settings that we need
     tensorflow.keras.backend.set_image_data_format("channels_first")
     tensorflow.keras.backend.set_floatx("float32")
-
+    print("num GPU's Available:", len(tensorflow.config.list_physical_devices('GPU')))
+    print(tensorflow.config.list_physical_devices('GPU'))
 
     # This should point at the directory containing the source LUNA22 prequel dataset
     DATA_DIRECTORY = raw_data_dir#Path().absolute() / "LUNA22 prequel"
@@ -113,12 +133,13 @@ def main(
     # This should point at the pretrained model weights file for the VGG16 model.
     # The file can be downloaded here:
     # https://storage.googleapis.com/tensorflow/keras-applications/vgg16/vgg16_weights_tf_dim_ordering_tf_kernels.h5
-    # PRETRAINED_VGG16_WEIGHTS_FILE = (
-    #     Path().absolute()
-    #     / "pretrained_weights"
-    #     / "vgg16_weights_tf_dim_ordering_tf_kernels.h5"
-    # )
-    # maybe_download_vgg16_pretrained_weights(PRETRAINED_VGG16_WEIGHTS_FILE)
+    if base_model == 'vgg16':
+        PRETRAINED_VGG16_WEIGHTS_FILE = (
+            Path().absolute()
+            / "pretrained_weights"
+            / "vgg16_weights_tf_dim_ordering_tf_kernels.h5"
+        )
+        maybe_download_vgg16_pretrained_weights(PRETRAINED_VGG16_WEIGHTS_FILE)
 
 
     # Load dataset
@@ -134,7 +155,7 @@ def main(
         generated_data_dir=GENERATED_DATA_DIRECTORY,
     )
     inputs = full_dataset["inputs"]
-
+    input_shape = input_size, input_size, 3
 
     @unique
     class MLProblem(Enum):
@@ -143,7 +164,10 @@ def main(
 
 
     # Here you can switch the machine learning problem to solve
-    problem = problem#MLProblem.malignancy_prediction
+    if problem == "noduletype":
+        problem = MLProblem.noduletype
+    else:
+        problem = MLProblem.malignancy_prediction
 
     # Configure problem specific parameters
     if problem == MLProblem.malignancy_prediction:
@@ -268,44 +292,45 @@ def main(
         preprocess_fn=validation_preprocess_fn,
         batch_size=batch_size,
     )
-
-
-    # We use the VGG16 model
-    res_model = ResNet50(
-        include_top=True,
-        weights="imagenet",
-        input_tensor=None,
-        input_shape=None,
-        pooling="avg",
-        classes=num_classes,
-        classifier_activation=None,
-    )
-    model = Sequential()
-    for layer in vgg16_model.layers[:-1]: # this is where I changed your code
-        model.add(layer)
-    model.add(Dense(1024, activation='relu'))
-    model.add(Dense(num_classes, activation='sigmoid'))
-
-    # Show the model layers
-    print(model.summary())
+    
+    # Load Model
+    model = lung_model(num_classes, input_shape)
+    fold_var = 1
 
     # Load the pretrained imagenet VGG model weights except for the last layer
     # Because the pretrained weights will have a data size mismatch in the last layer of our model
     # two warnings will be raised, but these can be safely ignored.
-    # model.load_weights(str(PRETRAINED_VGG16_WEIGHTS_FILE), by_name=True, skip_mismatch=True)
+    if base_model == 'vgg16':
+        model.load_weights(str(PRETRAINED_VGG16_WEIGHTS_FILE), by_name=True, skip_mismatch=True)
 
     # Prepare model for training by defining the loss, optimizer, and metrics to use
     # Output labels and predictions are one-hot encoded, so we use the categorical_accuracy metric
+    opt = optimizers.Adam(learning_rate=learning_rate)
+    opt = optimizers.Lookahead(
+        optimizer=opt,
+        sync_period=5,
+        slow_step_size=0.5
+    )
+    
+    if problem == MLProblem.malignancy_prediction:
+        loss_fn = losses.BinaryCrossentropy
+    else:
+        loss_fn = losses.categorical_crossentropy
+    
     model.compile(
-        optimizer=SGD(learning_rate=learning_rate, momentum=0.8, nesterov=True),
-        loss=categorical_crossentropy,
+        optimizer=opt, #SGD(learning_rate=learning_rate, momentum=0.8, nesterov=True),
+        loss=loss_fn,
         metrics=["categorical_accuracy"],
     )
 
     # Start actual training process
     output_model_file = (
-        TRAINING_OUTPUT_DIRECTORY / f"vgg16_{problem.value}_best_val_accuracy.h5"
+       TRAINING_OUTPUT_DIRECTORY / get_model_name(fold_var, problem, base_model) #f"vgg16_{problem.value}_best_val_accuracy.h5"
     )
+    
+    logdir = TRAINING_OUTPUT_DIRECTORY / f"logs/{base_model}_{problem.value}_{str(fold_var)}"
+    tensorboard_callback = keras.callbacks.TensorBoard(log_dir=logdir)
+
     callbacks = [
         TerminateOnNaN(),
         ModelCheckpoint(
@@ -324,7 +349,9 @@ def main(
             patience=100,
             verbose=1,
         ),
+        tensorboard_callback
     ]
+    
     history = model.fit(
         training_data_generator,
         steps_per_epoch=len(training_data_generator),
@@ -351,6 +378,9 @@ def main(
     plt.xlabel("Epoch")
     plt.legend(["Accuracy", "Validation Accuracy", "loss", "Validation Loss"])
     plt.savefig(str(output_history_img_file), bbox_inches="tight")
+
+def get_model_name(fold_var, problem, base_model):
+    return f"{base_model}_{problem.value}_{str(fold_var)}_best_vall_acc.h5"
 
 if __name__ == "__main__":
     main()

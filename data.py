@@ -9,6 +9,7 @@ import SimpleITK
 
 DATASET_TYPE = Dict[str, Union[List[List[int]], np.ndarray]]
 
+np.random.seed(42)
 
 @unique
 class NoduleType(Enum):
