@@ -30,7 +30,9 @@ def lung_model(input_shape, num_classes: int, verbose: int = 1):
 
     x = keras.layers.GlobalAveragePooling2D()(x)
     # x = layers.Flatten()(base_model.output)
-    x = layers.Dense(1024, activation='relu')(x)
+    x = layers.Dense(1024)(x)
+    x = BatchNormalization()(x)
+    x = layers.Activation(activations.relu)(x)
     x = keras.layers.Dropout(0.2)(x)
     o = layers.Dense(num_classes, activation='softmax')(x)
 
