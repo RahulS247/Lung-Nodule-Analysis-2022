@@ -4,7 +4,9 @@ from enum import Enum, unique
 
 import numpy as np
 import matplotlib.pyplot as plt
-
+from random import sample
+import cv2 as cv
+from skimage.util import random_noise
 
 import tensorflow
 from tensorflow import keras
@@ -226,16 +228,39 @@ def main(
         data[data > 1] = 1.0
         data[data < 0] = 0.0
         return data
-
-
-    def random_flip_augmentation(
-        input_sample: np.ndarray, axis: Tuple[int, ...] = (1, 2)
-    ) -> np.ndarray:
+    
+    #DATA AUGMENTATION FUNCTIONS begin
+    def rotation_augmentation(input_sample: np.ndarray    
+                             ) -> np.ndarray:
+        angles = [90,180,270]
+        input_sample = rotate(input_sample, sample(angles,1)[0])
+        return input_sample           
+    
+    def flip_augmentation(input_sample: np.ndarray
+                         ) -> np.ndarray:
+        axis=(1,2)
         for ax in axis:
             if np.random.random_sample() > 0.5:
                 input_sample = np.flip(input_sample, axis=ax)
         return input_sample
-
+    
+    def add_noise_augmentation(input_sample: np.ndarray    
+                             ) -> np.ndarray:
+        input_sample = random_noise(input_sample)
+        return input_sample 
+    
+    def blur_augmentation(input_sample: np.ndarray    
+                             ) -> np.ndarray:
+         input_sample = cv.GaussianBlur(input_sample, (9,9),0)
+         return input_sample
+    
+    transformations = { 'rotate': rotation_augmentation,
+                        'flip': flip_augmentation, 
+                        'noise': add_noise_augmentation,
+                        'blurring':blur_augmentation
+    }      
+    
+    #DATA AUGMENTATION FUNCTIONS end     
 
     def shared_preprocess_fn(input_batch: np.ndarray) -> np.ndarray:
         """Preprocessing that is used by both the training and validation sets during training
@@ -253,8 +278,10 @@ def main(
 
         output_batch = []
         for sample in input_batch:
-            sample = random_flip_augmentation(sample, axis=(1, 2))
-            output_batch.append(sample)
+            #Change this part, not sure yet the right way 
+            sample_1 = random_flip_augmentation(sample, axis=(1, 2))
+            output_batch.append(sample_1)
+            output_batch.append(sample_2)
 
         return np.array(output_batch)
 
