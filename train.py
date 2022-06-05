@@ -26,7 +26,9 @@ import click
 #from models.resnet import lung_model
 #from models.simple_model import lung_model
 #from models.vgg16 import lung_model
-from models.seresnet18 import lung_model
+# from models.seresnet18 import lung_model
+# from models.resnet_baseOnly import lung_model
+from models.resnet18 import lung_model
 
 import sklearn
 from sklearn import metrics as skm
@@ -151,6 +153,13 @@ def main(
             / "vgg16_weights_tf_dim_ordering_tf_kernels.h5"
         )
         maybe_download_vgg16_pretrained_weights(PRETRAINED_VGG16_WEIGHTS_FILE)
+    if base_model == 'resnetbaseOnly':
+        PRETRAINED_VGG16_WEIGHTS_FILE = (
+            Path().absolute()
+            / "pretrained_weights"
+            / "vgg16_weights_tf_dim_ordering_tf_kernels.h5"
+        )
+        maybe_download_vgg16_pretrained_weights(PRETRAINED_VGG16_WEIGHTS_FILE)    
 
 
     # Load dataset
