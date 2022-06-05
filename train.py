@@ -9,11 +9,13 @@ import matplotlib.pyplot as plt
 import tensorflow
 from tensorflow import keras
 from tensorflow.keras import layers
-from ternsorflow.keras import optimizers
-from ternsorflow.keras import losses
+from tensorflow.keras import optimizers
+from tensorflow.keras import losses
 
 from tensorflow.keras.applications import VGG16, ResNet50
 from tensorflow.keras.callbacks import ModelCheckpoint, EarlyStopping, TerminateOnNaN
+
+import tensorflow_addons as tfa
 
 from balanced_sampler import sample_balanced, UndersamplingIterator
 from data import load_dataset
@@ -21,8 +23,17 @@ from utils import maybe_download_vgg16_pretrained_weights
 
 import click
 
-from models.resnet import lung_model
+#from models.resnet import lung_model
+#from models.simple_model import lung_model
+#from models.vgg16 import lung_model
+from models.seresnet18 import lung_model
+
 import sklearn
+from sklearn import metrics as skm
+
+import itertools
+
+import os
 
 @click.command()
 @click.option(
@@ -75,7 +86,7 @@ import sklearn
 @click.option(
     "--learning_rate",
     type=float,
-    default=0.0001,
+    default=0.003,
 )
 @click.option(
     "--epochs",
@@ -155,7 +166,7 @@ def main(
         generated_data_dir=GENERATED_DATA_DIRECTORY,
     )
     inputs = full_dataset["inputs"]
-    input_shape = input_size, input_size, 3
+    input_shape = 3, input_size, input_size
 
     @unique
     class MLProblem(Enum):
@@ -165,7 +176,7 @@ def main(
 
     # Here you can switch the machine learning problem to solve
     if problem == "noduletype":
-        problem = MLProblem.noduletype
+        problem = MLProblem.nodule_type_prediction
     else:
         problem = MLProblem.malignancy_prediction
 
@@ -185,7 +196,7 @@ def main(
         # We made this problem a multiclass classification problem with three classes:
         # 0 - non-solid, 1 - part-solid, 2 - solid
         num_classes = 3
-        batch_size = batch_size #30  # make this a factor of three to fit three classes evenly per batch during training
+        batch_size = 15  # make this a factor of three to fit three classes evenly per batch during training
         # This dataset has only few part-solid nodules in the dataset, so we make a tiny validation set
         num_validation_samples = batch_size * 2
         labels = full_dataset["labels_nodule_type"]
@@ -296,7 +307,7 @@ def main(
     )
     
     # Load Model
-    model = lung_model(num_classes, input_shape)
+    model = lung_model(input_shape, num_classes)
     fold_var = 1
 
     # Load the pretrained imagenet VGG model weights except for the last layer
@@ -308,19 +319,21 @@ def main(
     # Prepare model for training by defining the loss, optimizer, and metrics to use
     # Output labels and predictions are one-hot encoded, so we use the categorical_accuracy metric
     opt = optimizers.Adam(learning_rate=learning_rate)
-    opt = optimizers.Lookahead(
+    opt = tfa.optimizers.Lookahead(
         optimizer=opt,
         sync_period=5,
         slow_step_size=0.5
     )
     
     if problem == MLProblem.malignancy_prediction:
-        loss_fn = losses.BinaryCrossentropy
+        loss_fn = losses.categorical_crossentropy
+        class_weight = {0:0.7, 1:0.3}
     else:
         loss_fn = losses.categorical_crossentropy
+        class_weight = {0:0.9, 1:0.9, 2:0.1}
     
     model.compile(
-        optimizer=opt, #SGD(learning_rate=learning_rate, momentum=0.8, nesterov=True),
+        optimizer=optimizers.SGD(learning_rate=learning_rate, momentum=0.8, nesterov=True),
         loss=loss_fn,
         metrics=["categorical_accuracy"],
     )
@@ -330,7 +343,11 @@ def main(
        TRAINING_OUTPUT_DIRECTORY / get_model_name(fold_var, problem, base_model) #f"vgg16_{problem.value}_best_val_accuracy.h5"
     )
     
-    logdir = TRAINING_OUTPUT_DIRECTORY / f"logs/{base_model}_{problem.value}_{str(fold_var)}"
+    p = pathlib.Path(TRAINING_OUTPUT_DIRECTORY / f"logs/{problem.value}/")
+    p.mkdir(parents=True, exist_ok=True)
+    
+    n_dirs = len(os.listdir(TRAINING_OUTPUT_DIRECTORY / f"logs/{problem.value}/"))
+    logdir = TRAINING_OUTPUT_DIRECTORY / f"logs/{problem.value}/_{base_model}__{str(fold_var)}_run{n_dirs}"
     tensorboard_callback = keras.callbacks.TensorBoard(log_dir=logdir)
 
     callbacks = [
@@ -356,23 +373,40 @@ def main(
     
     history = model.fit(
         training_data_generator,
+        #x=training_inputs,
+        #y=training_labels,
         steps_per_epoch=len(training_data_generator),
+        #class_weight={0:0.9, 1:0.9, 2:0.1},
         validation_data=validation_data_generator,
         validation_steps=None,
         validation_freq=1,
         epochs=epochs,
         callbacks=callbacks,
         verbose=2,
+        shuffle=True,
     )
+    
+    #Load best model
+    model.load_weights(output_model_file)
     
     # Conf matrix
     y_val_auto = model.predict(validation_data_generator)
-    conf_mat_nn = sklearn.metrics.confusion_matrix(labels, y_validation_auto.argmax(axis=1))
-    acc_nn = sklearn.metrics.accuracy_score(y_validation, y_validation_auto.argmax(axis=1))
+    print(validation_labels.shape, y_val_auto.shape)
+    print(validation_labels.argmax(axis=1).shape, y_val_auto.argmax(axis=1).shape)
+    print(validation_labels)
+    print("PREDICTIONS")
+    print(y_val_auto)
+    print("IMAGE")
+    print(np.max(training_data_generator.__getitem__(0)[0]))
+    print(training_data_generator.__getitem__(0)[0])
+    print(training_data_generator.__getitem__(0)[0].shape)
+    conf_mat_nn = skm.confusion_matrix(validation_labels.argmax(axis=1), y_val_auto.argmax(axis=1))
+    acc_nn = skm.accuracy_score(validation_labels.argmax(axis=1), y_val_auto.argmax(axis=1))
+    print("vall acc:", acc_nn)
     output_conf_img_file = (
         TRAINING_OUTPUT_DIRECTORY / f"{base_model}_{problem.value}_conf_plot.png"
     )
-    plot_confusion_matrix(conf_mat, classes_names, output_conf_img_file)
+    plot_confusion_matrix(conf_mat_nn, classes_names, output_conf_img_file)
 
     # generate a plot using the training history...
     output_history_img_file = (

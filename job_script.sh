@@ -23,8 +23,8 @@ cp -R "$HOME"/"$DATA_DIR_NAME"/gen_data_dir/ "$TMPDIR"/"$USER_DIR_NAME"/gen_data
 mkdir "$TMPDIR"/"$USER_DIR_NAME"/output_dir
  
 #Execute a Python program located in $HOME, that takes an input file and output directory as arguments.
-python "$HOME"/"$USER_DIR_NAME"/Lung-Nodule-Analysis-2022/train.py --raw_data_dir "$TMPDIR"/"$USER_DIR_NAME"/in_dir/LUNA22_prequel --out_dir "$TMPDIR"/"$USER_DIR_NAME"/output_dir --gen_data_dir "$TMPDIR"/"$USER_DIR_NAME"/gen_data_dir --problem malignancy --epochs 250 --base_model "resnet" --problem "noduletype"
-python "$HOME"/"$USER_DIR_NAME"/Lung-Nodule-Analysis-2022/train.py --raw_data_dir "$TMPDIR"/"$USER_DIR_NAME"/in_dir/LUNA22_prequel --out_dir "$TMPDIR"/"$USER_DIR_NAME"/output_dir --gen_data_dir "$TMPDIR"/"$USER_DIR_NAME"/gen_data_dir --problem malignancy --epochs 250 --base_model "resnet" --problem "malignancy"
+python "$HOME"/"$USER_DIR_NAME"/Lung-Nodule-Analysis-2022/train.py --raw_data_dir "$TMPDIR"/"$USER_DIR_NAME"/in_dir/LUNA22_prequel --out_dir "$TMPDIR"/"$USER_DIR_NAME"/output_dir --gen_data_dir "$TMPDIR"/"$USER_DIR_NAME"/gen_data_dir --problem malignancy --epochs 1 --base_model "resnet" --problem "noduletype"
+python "$HOME"/"$USER_DIR_NAME"/Lung-Nodule-Analysis-2022/train.py --raw_data_dir "$TMPDIR"/"$USER_DIR_NAME"/in_dir/LUNA22_prequel --out_dir "$TMPDIR"/"$USER_DIR_NAME"/output_dir --gen_data_dir "$TMPDIR"/"$USER_DIR_NAME"/gen_data_dir --problem malignancy --epochs 1 --base_model "resnet" --problem "malignancy"
 
 #Copy output directory from scratch to home
 cp -r "$TMPDIR"/"$USER_DIR_NAME"/output_dir "$HOME"/"$USER_DIR_NAME"/Lung-Nodule-Analysis-2022/
