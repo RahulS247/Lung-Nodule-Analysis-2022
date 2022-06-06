@@ -17,18 +17,22 @@ from tensorflow.keras.callbacks import ModelCheckpoint, EarlyStopping, Terminate
 
 import tensorflow_addons as tfa
 
-from balanced_sampler import sample_balanced, UndersamplingIterator
-from data import load_dataset
 from utils import maybe_download_vgg16_pretrained_weights
 
 import click
 
-#from models.resnet import lung_model
-#from models.simple_model import lung_model
+# models
+# from models.resnet import lung_model
+# from models.simple_model import lung_model
 # from models.vgg16 import lung_model
 # from models.seresnet18 import lung_model
 # from models.resnet_baseOnly import lung_model
 from models.resnet18 import lung_model
+
+# Data generation
+from data_generators.data_gen import NoduleDataGenerator
+from balanced_sampler import sample_balanced, UndersamplingIterator
+from data import load_dataset
 
 import sklearn
 from sklearn import metrics as skm
@@ -292,19 +296,34 @@ def main(
         return input_batch
 
 
-    training_data_generator = UndersamplingIterator(
-        training_inputs,
-        training_labels,
+    # training_data_generator = UndersamplingIterator(
+    #     training_inputs,
+    #     training_labels,
+    #     shuffle=True,
+    #     preprocess_fn=train_preprocess_fn,
+    #     batch_size=batch_size,
+    # )
+    # validation_data_generator = UndersamplingIterator(
+    #     validation_inputs,
+    #     validation_labels,
+    #     shuffle=False,
+    #     preprocess_fn=validation_preprocess_fn,
+    #     batch_size=batch_size,
+    # )
+    training_data_generator = NoduleDataGenerator(
+        inputs=training_inputs,
+        labels=training_labels,
+        batch_size=batch_size,
         shuffle=True,
         preprocess_fn=train_preprocess_fn,
-        batch_size=batch_size,
     )
-    validation_data_generator = UndersamplingIterator(
-        validation_inputs,
-        validation_labels,
-        shuffle=False,
-        preprocess_fn=validation_preprocess_fn,
+    
+    validation_data_generator = NoduleDataGenerator(
+        inputs=validation_inputs,
+        labels=validation_labels,
         batch_size=batch_size,
+        shuffle=True,
+        preprocess_fn=validation_preprocess_fn,
     )
     
     # Load Model
@@ -385,11 +404,11 @@ def main(
     ]
     
     history = model.fit(
-        #training_data_generator,
-        x=training_inputs,
-        y=training_labels,
-        batch_size=batch_size,
-        steps_per_epoch=len(training_inputs),
+        training_data_generator,
+        # x=training_inputs,
+        # y=training_labels,
+        # batch_size=batch_size,
+        steps_per_epoch=len(training_data_generator),
         class_weight=class_weight,
         validation_data=validation_data_generator,
         validation_steps=None,
