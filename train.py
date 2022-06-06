@@ -25,7 +25,7 @@ import click
 
 #from models.resnet import lung_model
 #from models.simple_model import lung_model
-#from models.vgg16 import lung_model
+# from models.vgg16 import lung_model
 # from models.seresnet18 import lung_model
 # from models.resnet_baseOnly import lung_model
 from models.resnet18 import lung_model
@@ -153,14 +153,6 @@ def main(
             / "vgg16_weights_tf_dim_ordering_tf_kernels.h5"
         )
         maybe_download_vgg16_pretrained_weights(PRETRAINED_VGG16_WEIGHTS_FILE)
-    if base_model == 'resnetbaseOnly':
-        PRETRAINED_VGG16_WEIGHTS_FILE = (
-            Path().absolute()
-            / "pretrained_weights"
-            / "vgg16_weights_tf_dim_ordering_tf_kernels.h5"
-        )
-        maybe_download_vgg16_pretrained_weights(PRETRAINED_VGG16_WEIGHTS_FILE)    
-
 
     # Load dataset
     # This method will generate a preprocessed dataset from the source data if it is not present (only needs to be done once)
@@ -336,15 +328,27 @@ def main(
     
     if problem == MLProblem.malignancy_prediction:
         loss_fn = losses.categorical_crossentropy
-        class_weight = {0:0.7, 1:0.3}
+        class_weight = {0:1.5, 1:0.7}
     else:
         loss_fn = losses.categorical_crossentropy
-        class_weight = {0:0.9, 1:0.9, 2:0.1}
+        class_weight = {0:4.96, 1:10.3, 2:0.37}
+    
+    model_metrics = [
+      keras.metrics.TruePositives(name='tp'),
+      keras.metrics.FalsePositives(name='fp'),
+      keras.metrics.TrueNegatives(name='tn'),
+      keras.metrics.FalseNegatives(name='fn'), 
+      keras.metrics.CategoricalAccuracy(name='categorical_accuracy'),
+      keras.metrics.Precision(name='precision'),
+      keras.metrics.Recall(name='recall'),
+      keras.metrics.AUC(name='auc'),
+      keras.metrics.AUC(name='prc', curve='PR'), # precision-recall curve
+    ]
     
     model.compile(
-        optimizer=optimizers.SGD(learning_rate=learning_rate, momentum=0.8, nesterov=True),
+        optimizer=opt,#optimizers.SGD(learning_rate=learning_rate, momentum=0.8, nesterov=True),
         loss=loss_fn,
-        metrics=["categorical_accuracy"],
+        metrics=model_metrics,#["categorical_accuracy"],
     )
 
     # Start actual training process
@@ -381,11 +385,12 @@ def main(
     ]
     
     history = model.fit(
-        training_data_generator,
-        #x=training_inputs,
-        #y=training_labels,
-        steps_per_epoch=len(training_data_generator),
-        #class_weight={0:0.9, 1:0.9, 2:0.1},
+        #training_data_generator,
+        x=training_inputs,
+        y=training_labels,
+        batch_size=batch_size,
+        steps_per_epoch=len(training_inputs),
+        class_weight=class_weight,
         validation_data=validation_data_generator,
         validation_steps=None,
         validation_freq=1,

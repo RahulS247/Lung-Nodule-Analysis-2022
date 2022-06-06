@@ -17,8 +17,8 @@ def lung_model(input_shape: int, num_classes: int, verbose: int = 1):
 
     # Base Model
     base_model = ResNet50(
-       include_top=False,
-       weights="imagenet",
+       include_top=True,
+       weights=None,
        input_tensor=None,
        input_shape=input_shape,
        pooling=None ,
@@ -31,10 +31,10 @@ def lung_model(input_shape: int, num_classes: int, verbose: int = 1):
     # Extended part
     # x = scale_layer(inputs)
     x = data_augmentaiton(inputs)
-    x = base_model(x)
-    x = layers.Flatten()(x)
-    x = layers.Dropout(0.2)(x)
-    o = layers.Dense(num_classes, activation='softmax', kernel_initializer=initializer, kernel_regularizer='l2')(x)
+    o = base_model(x)
+    # x = layers.Flatten()(x)
+    # x = layers.Dropout(0.2)(x)
+    # o = layers.Dense(num_classes, activation='softmax', kernel_initializer=initializer, kernel_regularizer='l2')(x)
 
     # Build model
     model = keras.Model(inputs=inputs, outputs=o)
