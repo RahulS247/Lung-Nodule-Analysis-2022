@@ -4,7 +4,7 @@ from enum import Enum, unique
 
 import numpy as np
 import matplotlib.pyplot as plt
-from random import sample
+from random import sample, choice, random
 import cv2 as cv
 from skimage.util import random_noise
 from skimage.transform import rotate
@@ -234,7 +234,8 @@ def main(
     def rotation_augmentation(input_sample: np.ndarray    
                              ) -> np.ndarray:
         angles = [90,180,270]
-        input_sample = rotate(input_sample, sample(angles,1)[0])
+        angle = sample(angles,1)[0]
+        input_sample = transform.rotate(input_sample, angle)        
         return input_sample           
     
     def flip_augmentation(input_sample: np.ndarray
@@ -255,13 +256,7 @@ def main(
          input_sample = cv.GaussianBlur(input_sample, (9,9),0)
          return input_sample
     
-    # Add brightness/exposure function
-    
-    transformations = { 'rotate': rotation_augmentation,
-                        'flip': flip_augmentation, 
-                        'noise': add_noise_augmentation,
-                        'blurring':blur_augmentation
-    }      
+    # Add brightness/exposure functions
     
     #DATA AUGMENTATION FUNCTIONS end     
 
