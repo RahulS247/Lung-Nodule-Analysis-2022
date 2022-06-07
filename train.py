@@ -254,6 +254,8 @@ def main(
          input_sample = cv.GaussianBlur(input_sample, (9,9),0)
          return input_sample
     
+    # Add brightness/exposure function
+    
     transformations = { 'rotate': rotation_augmentation,
                         'flip': flip_augmentation, 
                         'noise': add_noise_augmentation,
@@ -281,7 +283,6 @@ def main(
             #Change this part, not sure yet the right way 
             sample_1 = random_flip_augmentation(sample, axis=(1, 2))
             output_batch.append(sample_1)
-            output_batch.append(sample_2)
 
         return np.array(output_batch)
 
