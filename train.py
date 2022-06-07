@@ -7,12 +7,13 @@ import matplotlib.pyplot as plt
 from random import sample
 import cv2 as cv
 from skimage.util import random_noise
+from skimage.transform import rotate
 
 import tensorflow
 from tensorflow import keras
 from tensorflow.keras import layers
 
-from tensorflow.keras.applications import VGG16, ResNet50
+from tensorflow.keras.applications import VGG16
 from tensorflow.keras.optimizers import SGD
 from tensorflow.keras.losses import categorical_crossentropy
 from tensorflow.keras.callbacks import ModelCheckpoint, EarlyStopping, TerminateOnNaN
@@ -280,9 +281,12 @@ def main(
 
         output_batch = []
         for sample in input_batch:
-            #Change this part, not sure yet the right way 
-            sample_1 = random_flip_augmentation(sample, axis=(1, 2))
-            output_batch.append(sample_1)
+            #Data augmentation
+            sample = rotation_augmentation(sample) if random()<0.75 else sample
+            sample = flip_augmentation(sample) if random()<0.25 else sample
+            sample = add_noise_augmentation(sample) if random()<0.75 else sample
+            sample = blur_augmentation(sample) if random()<0.75 else sample
+            output_batch.append(sample)
 
         return np.array(output_batch)
 
