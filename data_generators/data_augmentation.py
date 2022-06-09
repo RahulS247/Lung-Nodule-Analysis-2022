@@ -6,57 +6,72 @@ from skimage import exposure
 import numpy as np
 
 from typing import Tuple
+from data_generators import augmentation_functions as data_aug_f
 
-def clip_and_scale(
-    data: np.ndarray, min_value: float = -1000.0, max_value: float = 400.0
-) -> np.ndarray:
-    data = (data - min_value) / (max_value - min_value)
-    data[data > 1] = 1.0
-    data[data < 0] = 0.0
-    return data
 
-def rotation_augmentation(input_sample: np.ndarray    
-                            ) -> np.ndarray:
-    angles = [90,180,270]
-    angle = sample(angles,1)[0]
-    input_sample = transform.rotate(input_sample, angle)        
-    return input_sample           
+def shared_preprocess_fn(input_batch: np.ndarray) -> np.ndarray:
+    """Preprocessing that is used by both the training and validation sets during training
 
-def flip_augmentation(input_sample: np.ndarray
-                        ) -> np.ndarray:
-    axis=(1,2)
-    if np.random.random_sample() > 0.5:
-        input_sample = np.flip(input_sample, axis=axis[0])
-    else:
-        input_sample = np.flip(input_sample, axis=axis[1])
-    return input_sample
+    :param input_batch: np.ndarray [batch_size x channels x dim_x x dim_y]
+    :return: np.ndarray preprocessed batch
+    """
+    input_batch = data_aug_f.clip_and_scale(input_batch, min_value=-1000.0, max_value=400.0)
+    # Can add more preprocessing here...
+    return input_batch
 
-def add_noise_augmentation(input_sample: np.ndarray    
-                            ) -> np.ndarray:
-    input_sample = random_noise(input_sample)
-    return input_sample 
 
-def blur_augmentation(input_sample: np.ndarray    
-                            ) -> np.ndarray:
-        input_sample = cv.GaussianBlur(input_sample, (9,9),0)
-        return input_sample
+def normal_train_preprocess_fn(input_batch: np.ndarray) -> np.ndarray:
+    input_batch = shared_preprocess_fn(input_batch=input_batch)
 
-def random_flip_augmentation(
-    input_sample: np.ndarray, axis: Tuple[int, ...] = (1, 2)
-) -> np.ndarray:
-    for ax in axis:
-        if np.random.random_sample() > 0.5:
-            input_sample = np.flip(input_sample, axis=ax)
-    return input_sample
+    output_batch = []
+    for sample in input_batch:
+        sample = data_aug_f.rotation_augmentation(sample) if random()<0.25 else sample
+        sample = data_aug_f.flip_augmentation(sample) if random()<0.75 else sample
+        sample = data_aug_f.add_noise_augmentation(sample) if random()<0.5 else sample
+        # sample = data_aug.blur_augmentation(sample) if random()<0.25 else sample
+        # sample = data_aug.img_exposure_gamma(sample, 0.8) if random()<0.125 else sample
+        # sample = data_aug.img_exposure_gamma(sample, 1.2) if random()<0.125 else sample
+        # sample = data_aug.img_exposure_log(sample, 0.8) if random()<0.125 else sample
+        # sample = data_aug.img_exposure_log(sample, 1.2) if random()<0.125 else sample
+        output_batch.append(sample)
 
-def img_exposure_gamma(image,gamma):
-    img = exposure.adjust_gamma(image,gamma)
-    return img
+    return np.array(output_batch)
 
-def img_exposure_log(image, log):
-    img = exposure.adjust_log(image,log)
-    return img
+def blurr_train_preprocess_fn(input_batch: np.ndarray) -> np.ndarray:
+    input_batch = shared_preprocess_fn(input_batch=input_batch)
 
-def img_exposure_sigmoid(image, sigmoid):
-    img = exposure.adjust_sigmoid(image,sigmoid)
-    return img
+    output_batch = []
+    for sample in input_batch:
+        sample = data_aug_f.rotation_augmentation(sample) if random()<0.25 else sample
+        sample = data_aug_f.flip_augmentation(sample) if random()<0.75 else sample
+        sample = data_aug_f.add_noise_augmentation(sample) if random()<0.5 else sample
+        sample = data_aug_f.blur_augmentation(sample) if random()<0.25 else sample
+        # sample = data_aug.img_exposure_gamma(sample, 0.8) if random()<0.125 else sample
+        # sample = data_aug.img_exposure_gamma(sample, 1.2) if random()<0.125 else sample
+        # sample = data_aug.img_exposure_log(sample, 0.8) if random()<0.125 else sample
+        # sample = data_aug.img_exposure_log(sample, 1.2) if random()<0.125 else sample
+        output_batch.append(sample)
+
+    return np.array(output_batch)
+
+def heavy_train_preprocess_fn(input_batch: np.ndarray) -> np.ndarray:
+    input_batch = shared_preprocess_fn(input_batch=input_batch)
+
+    output_batch = []
+    for sample in input_batch:
+        sample = data_aug_f.rotation_augmentation(sample) if random()<0.25 else sample
+        sample = data_aug_f.flip_augmentation(sample) if random()<0.75 else sample
+        sample = data_aug_f.add_noise_augmentation(sample) if random()<0.5 else sample
+        sample = data_aug_f.blur_augmentation(sample) if random()<0.25 else sample
+        sample = data_aug_f.img_exposure_gamma(sample, 0.8) if random()<0.125 else sample
+        sample = data_aug_f.img_exposure_gamma(sample, 1.2) if random()<0.125 else sample
+        sample = data_aug_f.img_exposure_log(sample, 0.8) if random()<0.125 else sample
+        sample = data_aug_f.img_exposure_log(sample, 1.2) if random()<0.125 else sample
+        output_batch.append(sample)
+
+    return np.array(output_batch)
+
+
+def validation_preprocess_fn(input_batch: np.ndarray) -> np.ndarray:
+    input_batch = shared_preprocess_fn(input_batch=input_batch)
+    return input_batch

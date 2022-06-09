@@ -130,6 +130,11 @@ import os
     type=str,
     default="model_1"
 )
+@click.option(
+    "--preprocessing_type",
+    type=click.Choice(['heavy', 'normal', "blur"], case_sensitive=True),
+    default="normal"
+)
 def main(
     raw_data_dir: pathlib.Path,
     gen_data_dir: pathlib.Path,
@@ -145,7 +150,8 @@ def main(
     kfolds: int,
     stratified: bool,
     sample_strat: str,
-    run_name: str
+    run_name: str,
+    preprocessing_type: str,
 ):
     
     if base_model == "resnet18":
@@ -287,39 +293,15 @@ def main(
     # It also allows us to balance the batches per class using undersampling
 
     # The following methods can be used to implement custom preprocessing/augmentation during training
-
-    def shared_preprocess_fn(input_batch: np.ndarray) -> np.ndarray:
-        """Preprocessing that is used by both the training and validation sets during training
-
-        :param input_batch: np.ndarray [batch_size x channels x dim_x x dim_y]
-        :return: np.ndarray preprocessed batch
-        """
-        input_batch = data_aug.clip_and_scale(input_batch, min_value=-1000.0, max_value=400.0)
-        # Can add more preprocessing here...
-        return input_batch
-
-
-    def train_preprocess_fn(input_batch: np.ndarray) -> np.ndarray:
-        input_batch = shared_preprocess_fn(input_batch=input_batch)
-
-        output_batch = []
-        for sample in input_batch:
-            sample = data_aug.rotation_augmentation(sample) if random()<0.25 else sample
-            sample = data_aug.flip_augmentation(sample) if random()<0.75 else sample
-            sample = data_aug.add_noise_augmentation(sample) if random()<0.5 else sample
-            sample = data_aug.blur_augmentation(sample) if random()<0.25 else sample
-            sample = data_aug.img_exposure_gamma(sample, 0.8) if random()<0.125 else sample
-            sample = data_aug.img_exposure_gamma(sample, 1.2) if random()<0.125 else sample
-            sample = data_aug.img_exposure_log(sample, 0.8) if random()<0.125 else sample
-            sample = data_aug.img_exposure_log(sample, 1.2) if random()<0.125 else sample
-            output_batch.append(sample)
-
-        return np.array(output_batch)
-
-
-    def validation_preprocess_fn(input_batch: np.ndarray) -> np.ndarray:
-        input_batch = shared_preprocess_fn(input_batch=input_batch)
-        return input_batch
+    if preprocessing_type == "normal":
+        train_preprocess_fn = data_aug.normal_train_preprocess_fn
+        validation_preprocess_fn = data_aug.validation_preprocess_fn
+    elif preprocessing_type == "blur":
+        train_preprocess_fn = data_aug.blurr_train_preprocess_fn
+        validation_preprocess_fn = data_aug.validation_preprocess_fn
+    elif preprocessing_type == "heavy":
+        train_preprocess_fn = data_aug.heavy_train_preprocess_fn
+        validation_preprocess_fn = data_aug.validation_preprocess_fn
 
     if sample_strat == "undersampling":
         training_data_generator = UndersamplingIterator(
