@@ -9,7 +9,7 @@ from tensorflow.keras.callbacks import ModelCheckpoint, EarlyStopping, Terminate
 
 from layers.resblock import ResBlock
 
-def lung_model(data_size_in, n_classes: int, verbose: int = 1) -> keras.Model:
+def lung_model(data_size_in, n_classes: int, verbose: int = 1, keras_aug=False) -> keras.Model:
       
     inputs = layers.Input(shape=data_size_in)
     
@@ -17,9 +17,12 @@ def lung_model(data_size_in, n_classes: int, verbose: int = 1) -> keras.Model:
     reg = tf.keras.regularizers.l2(0.001)
     
     #x = layers.RandomFlip(mode='horizontal')(inputs)
-    x = data_augmentaiton(inputs)
+    if keras_aug:
+      x = data_augmentaiton(inputs)
+      x = layers.Conv2D(64, kernel_size=7, strides=2, kernel_initializer=init, kernel_regularizer=reg)(x)
+    else:
+      x = layers.Conv2D(64, kernel_size=7, strides=2, kernel_initializer=init, kernel_regularizer=reg)(inputs)
     
-    x = layers.Conv2D(64, kernel_size=7, strides=2, kernel_initializer=init, kernel_regularizer=reg)(x)
     x = layers.BatchNormalization()(x)
     x = layers.Activation(keras.activations.relu)(x)
     x = layers.MaxPooling2D(pool_size=3, strides=2)(x)

@@ -2,12 +2,12 @@ import tensorflow as tf
 from tensorflow import keras
 from tensorflow.keras import layers
 
-from tensorflow.keras.applications import VGG16, ResNet50
+from tensorflow.keras.applications import VGG16
 from tensorflow.keras.optimizers import SGD
 from tensorflow.keras.losses import categorical_crossentropy
 from tensorflow.keras.callbacks import ModelCheckpoint, EarlyStopping, TerminateOnNaN
 
-def lung_model(input_shape: int, num_classes: int, verbose: int = 1):
+def lung_model(input_shape: int, num_classes: int, verbose: int = 1, keras_aug=False):
     inputs = keras.Input(shape=input_shape)
 
     # Scaling
@@ -28,8 +28,11 @@ def lung_model(input_shape: int, num_classes: int, verbose: int = 1):
 
     # Extended part
     # # x = scale_layer(inputs)
-    x = data_augmentaiton(inputs)
-    o = base_model(x)
+    if keras_aug:
+      x = data_augmentaiton(inputs)
+      o = base_model(x)
+    else:
+      o = base_model(inputs)
 
     # x = layers.GlobalAveragePooling2D()(x)
     # x = layers.Activation(keras.activations.relu)(x)

@@ -5,6 +5,11 @@ from enum import Enum, unique
 
 import numpy as np
 import matplotlib.pyplot as plt
+from random import sample, choice, random
+import cv2 as cv
+from skimage.util import random_noise
+from skimage.transform import rotate
+from skimage import exposure
 
 import tensorflow
 from tensorflow import keras
@@ -27,12 +32,13 @@ import click
 # from models.vgg16 import lung_model
 # from models.seresnet18 import lung_model
 # from models.resnet_baseOnly import lung_model
-from models.resnet18 import lung_model
+# from models.resnet18 import lung_model
 
 # Data generation
 from data_generators.data_gen import NoduleDataGenerator
 from balanced_sampler import sample_balanced, UndersamplingIterator
 from data import load_dataset
+from data_generators import data_augmentation as data_aug
 
 import sklearn
 from sklearn import metrics as skm
@@ -114,6 +120,16 @@ import os
     type=bool,
     default=False
 )
+@click.option(
+    "--sample_strat",
+    type=click.Choice(['undersampling', 'normal'], case_sensitive=True),
+    default='undersampling'
+)
+@click.option(
+    "--run_name",
+    type=str,
+    default="model_1"
+)
 def main(
     raw_data_dir: pathlib.Path,
     gen_data_dir: pathlib.Path,
@@ -127,9 +143,31 @@ def main(
     epochs: int,
     early_stop_delta: float,
     kfolds: int,
-    stratified: bool
-    
+    stratified: bool,
+    sample_strat: str,
+    run_name: str
 ):
+    
+    if base_model == "resnet18":
+        from models.resnet18 import lung_model
+    elif base_model == "resnet50":
+        from models.resnet_baseOnly import lung_model
+    elif base_model == "vgg16" or base_model == 'vgg16_pretrained':
+        from models.vgg16 import lung_model
+    elif base_model == "vgg19":
+        from models.vgg19 import lung_model
+    elif base_model == "inceptionresnet":
+        from models.inceptionResNet import lung_model
+    elif base_model == "efficientnetv0":
+        from models.efficientnetb0 import lung_model
+    elif base_model == "efficientnetv2":
+        from models.efficientnetb0v2 import lung_model
+    elif base_model == "densenet":
+        from models.densenet import lung_model
+    elif base_model == "simplecnn":
+        from models.simple_model import lung_model
+    
+    
     tensorflow.random.set_seed(42)
     np.random.seed(42)
     # Enforce some Keras backend settings that we need
@@ -146,11 +184,11 @@ def main(
 
     # This should point at a directory to store the training output files
     TRAINING_OUTPUT_DIRECTORY = out_dir#Path().absolute()
-
+    
     # This should point at the pretrained model weights file for the VGG16 model.
     # The file can be downloaded here:
     # https://storage.googleapis.com/tensorflow/keras-applications/vgg16/vgg16_weights_tf_dim_ordering_tf_kernels.h5
-    if base_model == 'vgg16':
+    if base_model == 'vgg16_pretrained':
         PRETRAINED_VGG16_WEIGHTS_FILE = (
             Path().absolute()
             / "pretrained_weights"
@@ -201,7 +239,7 @@ def main(
         # We made this problem a multiclass classification problem with three classes:
         # 0 - non-solid, 1 - part-solid, 2 - solid
         num_classes = 3
-        batch_size = 15  # make this a factor of three to fit three classes evenly per batch during training
+        batch_size = batch_size #30  # make this a factor of three to fit three classes evenly per batch during training
         # This dataset has only few part-solid nodules in the dataset, so we make a tiny validation set
         num_validation_samples = batch_size * 2
         labels = full_dataset["labels_nodule_type"]
@@ -250,32 +288,13 @@ def main(
 
     # The following methods can be used to implement custom preprocessing/augmentation during training
 
-
-    def clip_and_scale(
-        data: np.ndarray, min_value: float = -1000.0, max_value: float = 400.0
-    ) -> np.ndarray:
-        data = (data - min_value) / (max_value - min_value)
-        data[data > 1] = 1.0
-        data[data < 0] = 0.0
-        return data
-
-
-    def random_flip_augmentation(
-        input_sample: np.ndarray, axis: Tuple[int, ...] = (1, 2)
-    ) -> np.ndarray:
-        for ax in axis:
-            if np.random.random_sample() > 0.5:
-                input_sample = np.flip(input_sample, axis=ax)
-        return input_sample
-
-
     def shared_preprocess_fn(input_batch: np.ndarray) -> np.ndarray:
         """Preprocessing that is used by both the training and validation sets during training
 
         :param input_batch: np.ndarray [batch_size x channels x dim_x x dim_y]
         :return: np.ndarray preprocessed batch
         """
-        input_batch = clip_and_scale(input_batch, min_value=-1000.0, max_value=400.0)
+        input_batch = data_aug.clip_and_scale(input_batch, min_value=-1000.0, max_value=400.0)
         # Can add more preprocessing here...
         return input_batch
 
@@ -285,7 +304,14 @@ def main(
 
         output_batch = []
         for sample in input_batch:
-            sample = random_flip_augmentation(sample, axis=(1, 2))
+            sample = data_aug.rotation_augmentation(sample) if random()<0.25 else sample
+            sample = data_aug.flip_augmentation(sample) if random()<0.75 else sample
+            sample = data_aug.add_noise_augmentation(sample) if random()<0.5 else sample
+            sample = data_aug.blur_augmentation(sample) if random()<0.25 else sample
+            sample = data_aug.img_exposure_gamma(sample, 0.8) if random()<0.125 else sample
+            sample = data_aug.img_exposure_gamma(sample, 1.2) if random()<0.125 else sample
+            sample = data_aug.img_exposure_log(sample, 0.8) if random()<0.125 else sample
+            sample = data_aug.img_exposure_log(sample, 1.2) if random()<0.125 else sample
             output_batch.append(sample)
 
         return np.array(output_batch)
@@ -295,45 +321,46 @@ def main(
         input_batch = shared_preprocess_fn(input_batch=input_batch)
         return input_batch
 
-
-    # training_data_generator = UndersamplingIterator(
-    #     training_inputs,
-    #     training_labels,
-    #     shuffle=True,
-    #     preprocess_fn=train_preprocess_fn,
-    #     batch_size=batch_size,
-    # )
-    # validation_data_generator = UndersamplingIterator(
-    #     validation_inputs,
-    #     validation_labels,
-    #     shuffle=False,
-    #     preprocess_fn=validation_preprocess_fn,
-    #     batch_size=batch_size,
-    # )
-    training_data_generator = NoduleDataGenerator(
-        inputs=training_inputs,
-        labels=training_labels,
-        batch_size=batch_size,
-        shuffle=True,
-        preprocess_fn=train_preprocess_fn,
-    )
+    if sample_strat == "undersampling":
+        training_data_generator = UndersamplingIterator(
+            training_inputs,
+            training_labels,
+            shuffle=True,
+            preprocess_fn=train_preprocess_fn,
+            batch_size=batch_size,
+        )
+        validation_data_generator = UndersamplingIterator(
+            validation_inputs,
+            validation_labels,
+            shuffle=False,
+            preprocess_fn=validation_preprocess_fn,
+            batch_size=batch_size,
+        )
+    elif sample_strat == "normal":
+        training_data_generator = NoduleDataGenerator(
+            inputs=training_inputs,
+            labels=training_labels,
+            batch_size=batch_size,
+            shuffle=True,
+            preprocess_fn=train_preprocess_fn,
+        )
+        
+        validation_data_generator = NoduleDataGenerator(
+            inputs=validation_inputs,
+            labels=validation_labels,
+            batch_size=batch_size,
+            shuffle=True,
+            preprocess_fn=validation_preprocess_fn,
+        )
     
-    validation_data_generator = NoduleDataGenerator(
-        inputs=validation_inputs,
-        labels=validation_labels,
-        batch_size=batch_size,
-        shuffle=True,
-        preprocess_fn=validation_preprocess_fn,
-    )
-    
-    # Load Model
+    # Load Model 
     model = lung_model(input_shape, num_classes)
     fold_var = 1
 
     # Load the pretrained imagenet VGG model weights except for the last layer
     # Because the pretrained weights will have a data size mismatch in the last layer of our model
     # two warnings will be raised, but these can be safely ignored.
-    if base_model == 'vgg16':
+    if base_model == 'vgg16_pretrained':
         model.load_weights(str(PRETRAINED_VGG16_WEIGHTS_FILE), by_name=True, skip_mismatch=True)
 
     # Prepare model for training by defining the loss, optimizer, and metrics to use
@@ -351,6 +378,9 @@ def main(
     else:
         loss_fn = losses.categorical_crossentropy
         class_weight = {0:4.96, 1:10.3, 2:0.37}
+    
+    if sample_strat == "undersampling":
+        class_weight = None
     
     model_metrics = [
       keras.metrics.TruePositives(name='tp'),
@@ -372,14 +402,16 @@ def main(
 
     # Start actual training process
     output_model_file = (
-       TRAINING_OUTPUT_DIRECTORY / get_model_name(fold_var, problem, base_model) #f"vgg16_{problem.value}_best_val_accuracy.h5"
+       TRAINING_OUTPUT_DIRECTORY / base_model / get_model_name(fold_var, problem, run_name) #f"vgg16_{problem.value}_best_val_accuracy.h5"
     )
     
-    p = pathlib.Path(TRAINING_OUTPUT_DIRECTORY / f"logs/{problem.value}/")
+    p = pathlib.Path(TRAINING_OUTPUT_DIRECTORY / f"logs/{problem.value}/{base_model}")
     p.mkdir(parents=True, exist_ok=True)
+    omf = pathlib.Path(TRAINING_OUTPUT_DIRECTORY / base_model)
+    omf.mkdir(parents=True, exist_ok=True)
     
-    n_dirs = len(os.listdir(TRAINING_OUTPUT_DIRECTORY / f"logs/{problem.value}/"))
-    logdir = TRAINING_OUTPUT_DIRECTORY / f"logs/{problem.value}/_{base_model}__{str(fold_var)}_run{n_dirs}"
+    n_dirs = len(os.listdir(TRAINING_OUTPUT_DIRECTORY / f"logs/{problem.value}/{base_model}"))
+    logdir = TRAINING_OUTPUT_DIRECTORY / f"logs/{problem.value}/{base_model}/_{run_name}__{str(fold_var)}_run{n_dirs}"
     tensorboard_callback = keras.callbacks.TensorBoard(log_dir=logdir)
 
     callbacks = [
@@ -426,24 +458,19 @@ def main(
     y_val_auto = model.predict(validation_data_generator)
     print(validation_labels.shape, y_val_auto.shape)
     print(validation_labels.argmax(axis=1).shape, y_val_auto.argmax(axis=1).shape)
-    print(validation_labels)
-    print("PREDICTIONS")
-    print(y_val_auto)
     print("IMAGE")
     print(np.max(training_data_generator.__getitem__(0)[0]))
-    print(training_data_generator.__getitem__(0)[0])
-    print(training_data_generator.__getitem__(0)[0].shape)
     conf_mat_nn = skm.confusion_matrix(validation_labels.argmax(axis=1), y_val_auto.argmax(axis=1))
     acc_nn = skm.accuracy_score(validation_labels.argmax(axis=1), y_val_auto.argmax(axis=1))
     print("vall acc:", acc_nn)
     output_conf_img_file = (
-        TRAINING_OUTPUT_DIRECTORY / f"{base_model}_{problem.value}_conf_plot.png"
+        TRAINING_OUTPUT_DIRECTORY / base_model / f"{run_name}_{problem.value}_conf_plot.png"
     )
     plot_confusion_matrix(conf_mat_nn, classes_names, output_conf_img_file)
 
     # generate a plot using the training history...
     output_history_img_file = (
-        TRAINING_OUTPUT_DIRECTORY / f"{base_model}_{problem.value}_train_plot.png"
+        TRAINING_OUTPUT_DIRECTORY / base_model / f"{run_name}_{problem.value}_train_plot.png"
     )
     print(f"Saving training plot to: {output_history_img_file}")
     plt.plot(history.history["categorical_accuracy"])
@@ -456,8 +483,8 @@ def main(
     plt.legend(["Accuracy", "Validation Accuracy", "loss", "Validation Loss"])
     plt.savefig(str(output_history_img_file), bbox_inches="tight")
 
-def get_model_name(fold_var, problem, base_model):
-    return f"{base_model}_{problem.value}_{str(fold_var)}_best_vall_acc.h5"
+def get_model_name(fold_var, problem, run_name):
+    return f"{run_name}_{problem.value}_{str(fold_var)}_best_vall_acc.h5"
 
 def plot_confusion_matrix(conf_mat, classes, outfile,title='Confusion Matrix', cmap=plt.cm.Blues,):
     """
