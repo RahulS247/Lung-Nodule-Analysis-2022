@@ -35,7 +35,7 @@ def normal_train_preprocess_fn(input_batch: np.ndarray) -> np.ndarray:
         # sample = data_aug.img_exposure_log(sample, 1.2) if random()<0.125 else sample
         output_batch.append(sample)
 
-    return np.array(output_batch)
+    return np.asarray(output_batch).astype(np.float32)
 
 def blurr_train_preprocess_fn(input_batch: np.ndarray) -> np.ndarray:
     input_batch = shared_preprocess_fn(input_batch=input_batch)
@@ -52,7 +52,7 @@ def blurr_train_preprocess_fn(input_batch: np.ndarray) -> np.ndarray:
         # sample = data_aug.img_exposure_log(sample, 1.2) if random()<0.125 else sample
         output_batch.append(sample)
 
-    return np.array(output_batch)
+    return np.asarray(output_batch).astype(np.float32)
 
 def heavy_train_preprocess_fn(input_batch: np.ndarray) -> np.ndarray:
     input_batch = shared_preprocess_fn(input_batch=input_batch)
@@ -69,9 +69,9 @@ def heavy_train_preprocess_fn(input_batch: np.ndarray) -> np.ndarray:
         sample = data_aug_f.img_exposure_log(sample, 1.2) if random()<0.125 else sample
         output_batch.append(sample)
 
-    return np.array(output_batch)
+    return np.asarray(output_batch).astype(np.float32)
 
 
 def validation_preprocess_fn(input_batch: np.ndarray) -> np.ndarray:
     input_batch = shared_preprocess_fn(input_batch=input_batch)
-    return input_batch
+    return np.asarray(input_batch).astype(np.float32)
