@@ -2,6 +2,9 @@ from pathlib import Path
 from typing import Tuple
 from enum import Enum, unique
 
+from random import sample
+from skimage import transform
+
 import numpy as np
 import matplotlib.pyplot as plt
 
@@ -15,7 +18,8 @@ from balanced_sampler import sample_balanced, UndersamplingIterator
 from data import load_dataset
 from utils import maybe_download_vgg16_pretrained_weights
 
-
+gpu_avail= tensorflow.config.list_physical_devices('GPU')
+print(gpu_avail)
 # Enforce some Keras backend settings that we need
 tensorflow.keras.backend.set_image_data_format("channels_first")
 tensorflow.keras.backend.set_floatx("float32")
@@ -144,6 +148,15 @@ def random_flip_augmentation(
     for ax in axis:
         if np.random.random_sample() > 0.5:
             input_sample = np.flip(input_sample, axis=ax)
+    
+    return input_sample
+
+def rotation_augmentation(input_sample: np.ndarray    
+                            ) -> np.ndarray:
+    if np.random.random_sample() > 0.3:
+        angles = [90,180,270]
+        angle = sample(angles,1)[0]
+        input_sample = transform.rotate(input_sample, angle)        
     return input_sample
 
 
@@ -163,7 +176,8 @@ def train_preprocess_fn(input_batch: np.ndarray) -> np.ndarray:
 
     output_batch = []
     for sample in input_batch:
-        sample = random_flip_augmentation(sample, axis=(1, 2))
+        sample = random_flip_augmentation(sample, axis=(1,2))
+        sample = rotation_augmentation(sample)
         output_batch.append(sample)
 
     return np.array(output_batch)
@@ -246,7 +260,7 @@ history = model.fit(
     validation_data=validation_data_generator,
     validation_steps=None,
     validation_freq=1,
-    epochs=250,
+    epochs=3,
     callbacks=callbacks,
     verbose=2,
 )

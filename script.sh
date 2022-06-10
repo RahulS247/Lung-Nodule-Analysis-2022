@@ -5,11 +5,14 @@
 #SBATCH --cpus-per-task=18
 #SBATCH --gpus=1
 #SBATCH --partition=gpu
-#SBATCH --time=01:00:00
+#SBATCH --time=00:10:00
  
 #Loading modules
-module load 2021 Python/3.9.5-GCCcore-10.3.0
-module load TensorFlow/2.6.0-foss-2021a-CUDA-11.3.1
+source /home/dbalsameda/new_rah/bodyct-luna22-ismi-training-baseline/env/bin/activate
+
+#module purge
+module load 2021
+module load cuDNN/8.2.1.32-CUDA-11.3.1
 
 
 python train.py
