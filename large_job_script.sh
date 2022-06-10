@@ -9,6 +9,7 @@
  
 #Loading modules
 module load 2021
+module load OpenCV/4.5.3-foss-2021a-CUDA-11.3.1-contrib
 module load TensorFlow/2.6.0-foss-2021a-CUDA-11.3.1
 
 #Copy input file to scratch
