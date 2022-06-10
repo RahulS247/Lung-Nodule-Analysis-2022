@@ -5,7 +5,7 @@
 #SBATCH --cpus-per-task=18
 #SBATCH --gpus=1
 #SBATCH --partition=gpu
-#SBATCH --time=00:10:00
+#SBATCH --time=02:00:00
  
 #Loading modules
 source /home/dbalsameda/new_rah/bodyct-luna22-ismi-training-baseline/env/bin/activate

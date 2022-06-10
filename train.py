@@ -4,19 +4,21 @@ from enum import Enum, unique
 
 from random import sample
 from skimage import transform
-
+import click
 import numpy as np
 import matplotlib.pyplot as plt
 
 import tensorflow.keras
-from tensorflow.keras.applications import VGG16
-from tensorflow.keras.optimizers import SGD
+from tensorflow.keras.applications import VGG16, ResNet50
+from tensorflow.keras.optimizers import SGD, Adam
 from tensorflow.keras.losses import categorical_crossentropy
 from tensorflow.keras.callbacks import ModelCheckpoint, EarlyStopping, TerminateOnNaN
 
 from balanced_sampler import sample_balanced, UndersamplingIterator
 from data import load_dataset
 from utils import maybe_download_vgg16_pretrained_weights
+
+
 
 gpu_avail= tensorflow.config.list_physical_devices('GPU')
 print(gpu_avail)
@@ -33,6 +35,20 @@ GENERATED_DATA_DIRECTORY = Path().absolute()
 
 # This should point at a directory to store the training output files
 TRAINING_OUTPUT_DIRECTORY = Path().absolute()
+
+#downloading weight resnet50
+model_res50 = ResNet50(include_top=True, weights="imagenet", input_tensor=None, input_shape=None, pooling=None, classes=1000, classifier_activation="softmax")
+model_res50.summary()
+
+model_res50.save('pretrained_weights/resnet50_weights.h5')
+
+PRETRAINED_resnet50_WEIGHTS_FILE = (
+    Path().absolute()
+    / "pretrained_weights"
+    / "resnet50_weights.h5"
+)
+
+
 
 # This should point at the pretrained model weights file for the VGG16 model.
 # The file can be downloaded here:
@@ -146,7 +162,7 @@ def random_flip_augmentation(
     input_sample: np.ndarray, axis: Tuple[int, ...] = (1, 2)
 ) -> np.ndarray:
     for ax in axis:
-        if np.random.random_sample() > 0.5:
+        if np.random.random_sample() > 0.3:
             input_sample = np.flip(input_sample, axis=ax)
     
     return input_sample
@@ -154,7 +170,7 @@ def random_flip_augmentation(
 def rotation_augmentation(input_sample: np.ndarray    
                             ) -> np.ndarray:
     if np.random.random_sample() > 0.3:
-        angles = [90,180,270]
+        angles = [45,90,135,180,225,270,315]
         angle = sample(angles,1)[0]
         input_sample = transform.rotate(input_sample, angle)        
     return input_sample
@@ -205,7 +221,7 @@ validation_data_generator = UndersamplingIterator(
 
 
 # We use the VGG16 model
-model = VGG16(
+model = ResNet50(
     include_top=True,
     weights=None,
     input_tensor=None,
@@ -221,19 +237,19 @@ print(model.summary())
 # Load the pretrained imagenet VGG model weights except for the last layer
 # Because the pretrained weights will have a data size mismatch in the last layer of our model
 # two warnings will be raised, but these can be safely ignored.
-model.load_weights(str(PRETRAINED_VGG16_WEIGHTS_FILE), by_name=True, skip_mismatch=True)
+model.load_weights(str(PRETRAINED_resnet50_WEIGHTS_FILE), by_name=True, skip_mismatch=True)
 
 # Prepare model for training by defining the loss, optimizer, and metrics to use
 # Output labels and predictions are one-hot encoded, so we use the categorical_accuracy metric
 model.compile(
-    optimizer=SGD(learning_rate=0.0001, momentum=0.8, nesterov=True),
+    optimizer=Adam(learning_rate=0.0001),
     loss=categorical_crossentropy,
     metrics=["categorical_accuracy"],
 )
 
 # Start actual training process
 output_model_file = (
-    TRAINING_OUTPUT_DIRECTORY / f"vgg16_{problem.value}_best_val_accuracy.h5"
+    TRAINING_OUTPUT_DIRECTORY / f"resnet50_{problem.value}_best_val_accuracy.h5"
 )
 callbacks = [
     TerminateOnNaN(),
@@ -260,7 +276,7 @@ history = model.fit(
     validation_data=validation_data_generator,
     validation_steps=None,
     validation_freq=1,
-    epochs=3,
+    epochs=250,
     callbacks=callbacks,
     verbose=2,
 )
@@ -268,7 +284,7 @@ history = model.fit(
 
 # generate a plot using the training history...
 output_history_img_file = (
-    TRAINING_OUTPUT_DIRECTORY / f"vgg16_{problem.value}_train_plot.png"
+    TRAINING_OUTPUT_DIRECTORY / f"resnet50_{problem.value}_train_plot.png"
 )
 print(f"Saving training plot to: {output_history_img_file}")
 plt.plot(history.history["categorical_accuracy"])
