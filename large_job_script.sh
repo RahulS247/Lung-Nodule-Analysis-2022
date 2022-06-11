@@ -5,7 +5,7 @@
 #SBATCH --cpus-per-task=18
 #SBATCH --gpus=1
 #SBATCH --partition=gpu
-#SBATCH --time=03:00:00
+#SBATCH --time=48:00:00
  
 #Loading modules
 module load 2021
@@ -13,12 +13,21 @@ module load scikit-build/0.11.1-GCCcore-10.3.0
 module load OpenCV/4.5.3-foss-2021a-CUDA-11.3.1-contrib
 module load TensorFlow/2.6.0-foss-2021a-CUDA-11.3.1
 
+python -m venv ./venv
+source ./venv/bin/activate
+
+pip install scikit-image
+pip install matplotlib
+pip install tensorflow-addons
+pip install click
+pip install simpleitk
+pip install sklearn
 #Copy input file to scratch
 USER_DIR_NAME="LNA22_t"
 DATA_DIR_NAME="Data"
 mkdir -p "$TMPDIR"/"$USER_DIR_NAME"/in_dir
 mkdir -p "$TMPDIR"/"$USER_DIR_NAME"/gen_data_dir
-cp -R "$HOME"/"$DATA_DIR_NAME"/LUNA22_prequel/ "$TMPDIR"/"$USER_DIR_NAME"/in_dir
+cp -R "$HOME"/"$DATA_DIR_NAME"/LUNA21_prequel/ "$TMPDIR"/"$USER_DIR_NAME"/in_dir
 cp -R "$HOME"/"$DATA_DIR_NAME"/gen_data_dir/ "$TMPDIR"/"$USER_DIR_NAME"/gen_data_dir
 
 #Create output directory on scratch
