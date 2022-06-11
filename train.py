@@ -119,7 +119,7 @@ def main(problem: str):
         labels = full_dataset["labels_nodule_type"]
         # It is possible to generate training labels yourself using the raw annotations of the radiologists...
         labels_raw = full_dataset["labels_nodule_type_raw"]
-        class_weights = {0:15.0,1:37.0,2:1.0}
+        class_weights = {0:15.0,1:35.0,2:1.0}
     else:
         raise NotImplementedError(f"An unknown MLProblem was specified: {problem}")
 
@@ -257,14 +257,15 @@ def main(problem: str):
     # Prepare model for training by defining the loss, optimizer, and metrics to use
     # Output labels and predictions are one-hot encoded, so we use the categorical_accuracy metric
     model.compile(
-        optimizer=Adam(learning_rate=0.0001),
+        #optimizer=Adam(learning_rate=0.0001),
+        optimizer=SGD(learning_rate=0.0001,momentum=0.8,nesterov=True)
         loss=categorical_crossentropy,
         metrics=["categorical_accuracy"],
     )
 
     # Start actual training process
     output_model_file = (
-        TRAINING_OUTPUT_DIRECTORY / f"efficientb0_classbal_{problem.value}_best_val_accuracy.h5"
+        TRAINING_OUTPUT_DIRECTORY / f"efficientb0_classbal_sgd_{problem.value}_best_val_accuracy.h5"
     )
     callbacks = [
         TerminateOnNaN(),
@@ -301,7 +302,7 @@ def main(problem: str):
 
     # generate a plot using the training history...
     output_history_img_file = (
-        TRAINING_OUTPUT_DIRECTORY / f"efficientb0__classbal_{problem.value}_train_plot.png"
+        TRAINING_OUTPUT_DIRECTORY / f"efficientb0__classbal_sgd_{problem.value}_train_plot.png"
     )
     print(f"Saving training plot to: {output_history_img_file}")
     plt.plot(history.history["categorical_accuracy"])
