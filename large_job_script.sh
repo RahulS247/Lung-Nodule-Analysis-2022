@@ -13,6 +13,19 @@ module load scikit-build/0.11.1-GCCcore-10.3.0
 module load OpenCV/4.5.3-foss-2021a-CUDA-11.3.1-contrib
 module load TensorFlow/2.6.0-foss-2021a-CUDA-11.3.1
 
+#Copy input file to scratch
+USER_DIR_NAME="LNA22_t"
+DATA_DIR_NAME="Data"
+mkdir -p "$TMPDIR"/"$USER_DIR_NAME"/in_dir
+mkdir -p "$TMPDIR"/"$USER_DIR_NAME"/gen_data_dir
+cp -R "$HOME"/"$DATA_DIR_NAME"/LUNA22_prequel/ "$TMPDIR"/"$USER_DIR_NAME"/in_dir
+cp -R "$HOME"/"$DATA_DIR_NAME"/gen_data_dir/ "$TMPDIR"/"$USER_DIR_NAME"/gen_data_dir
+
+#Create output directory on scratch
+mkdir "$TMPDIR"/"$USER_DIR_NAME"/output_dir
+mkdir "$HOME"/"$USER_DIR_NAME"/terminal_logs
+
+# Activate venv
 python -m venv ./venv
 source ./venv/bin/activate
 
@@ -22,18 +35,7 @@ pip install tensorflow-addons
 pip install click
 pip install simpleitk
 pip install sklearn
-#Copy input file to scratch
-USER_DIR_NAME="LNA22_t"
-DATA_DIR_NAME="Data"
-mkdir -p "$TMPDIR"/"$USER_DIR_NAME"/in_dir
-mkdir -p "$TMPDIR"/"$USER_DIR_NAME"/gen_data_dir
-cp -R "$HOME"/"$DATA_DIR_NAME"/LUNA21_prequel/ "$TMPDIR"/"$USER_DIR_NAME"/in_dir
-cp -R "$HOME"/"$DATA_DIR_NAME"/gen_data_dir/ "$TMPDIR"/"$USER_DIR_NAME"/gen_data_dir
 
-#Create output directory on scratch
-mkdir "$TMPDIR"/"$USER_DIR_NAME"/output_dir
-mkdir "$HOME"/"$USER_DIR_NAME"/terminal_logs
- 
 #Execute a Python program located in $HOME, that takes an input file and output directory as arguments.
 python "$HOME"/"$USER_DIR_NAME"/Lung-Nodule-Analysis-2022/train.py --raw_data_dir "$TMPDIR"/"$USER_DIR_NAME"/in_dir/LUNA22_prequel --out_dir "$TMPDIR"/"$USER_DIR_NAME"/output_dir --gen_data_dir "$TMPDIR"/"$USER_DIR_NAME"/gen_data_dir --epochs 250 --base_model "resnet18" --run_name "resnet18_undersample" --problem "noduletype" --val_fraciton 0.075 --batch_size 15 --sample_strat undersampling --preprocessing_type normal > "$HOME"/"$USER_DIR_NAME"/terminal_logs/noduletype_r18u_log.txt
 python "$HOME"/"$USER_DIR_NAME"/Lung-Nodule-Analysis-2022/train.py --raw_data_dir "$TMPDIR"/"$USER_DIR_NAME"/in_dir/LUNA22_prequel --out_dir "$TMPDIR"/"$USER_DIR_NAME"/output_dir --gen_data_dir "$TMPDIR"/"$USER_DIR_NAME"/gen_data_dir --epochs 250 --base_model "resnet18" --run_name "resnet18_undersample" --problem "malignancy" --val_fraciton 0.075 --batch_size 16 --sample_strat undersampling --preprocessing_type normal > "$HOME"/"$USER_DIR_NAME"/terminal_logs/malignancy_r18u_log.txt
