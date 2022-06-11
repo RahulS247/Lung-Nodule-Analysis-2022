@@ -108,6 +108,7 @@ def main(problem: str):
         labels = full_dataset["labels_malignancy"]
         # It is possible to generate training labels yourself using the raw annotations of the radiologists...
         labels_raw = full_dataset["labels_malignancy_raw"]
+        class_weights = {0:2.0,1:1.0}
     elif problem == MLProblem.nodule_type_prediction:
         # We made this problem a multiclass classification problem with three classes:
         # 0 - non-solid, 1 - part-solid, 2 - solid
@@ -118,6 +119,7 @@ def main(problem: str):
         labels = full_dataset["labels_nodule_type"]
         # It is possible to generate training labels yourself using the raw annotations of the radiologists...
         labels_raw = full_dataset["labels_nodule_type_raw"]
+        class_weights = {0:15.0,1:37.0,2:1.0}
     else:
         raise NotImplementedError(f"An unknown MLProblem was specified: {problem}")
 
@@ -262,7 +264,7 @@ def main(problem: str):
 
     # Start actual training process
     output_model_file = (
-        TRAINING_OUTPUT_DIRECTORY / f"efficientb0_{problem.value}_best_val_accuracy.h5"
+        TRAINING_OUTPUT_DIRECTORY / f"efficientb0_classbal_{problem.value}_best_val_accuracy.h5"
     )
     callbacks = [
         TerminateOnNaN(),
@@ -290,14 +292,16 @@ def main(problem: str):
         validation_steps=None,
         validation_freq=1,
         epochs=250,
+        class_weight = class_weights,
         callbacks=callbacks,
         verbose=2,
+        
     )
 
 
     # generate a plot using the training history...
     output_history_img_file = (
-        TRAINING_OUTPUT_DIRECTORY / f"efficientb0_{problem.value}_train_plot.png"
+        TRAINING_OUTPUT_DIRECTORY / f"efficientb0__classbal_{problem.value}_train_plot.png"
     )
     print(f"Saving training plot to: {output_history_img_file}")
     plt.plot(history.history["categorical_accuracy"])
