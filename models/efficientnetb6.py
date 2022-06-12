@@ -2,7 +2,7 @@ import tensorflow as tf
 from tensorflow import keras
 from tensorflow.keras import layers
 
-from tensorflow.keras.applications import EfficientNetV2B0
+from tensorflow.keras.applications import EfficientNetB6
 from tensorflow.keras.optimizers import SGD
 from tensorflow.keras.losses import categorical_crossentropy
 from tensorflow.keras.callbacks import ModelCheckpoint, EarlyStopping, TerminateOnNaN
@@ -14,7 +14,7 @@ def lung_model(input_shape: int, num_classes: int, verbose: int = 1, keras_aug=F
     # scale_layer = keras.layers.Rescaling(scale=1 / 127.5, offset=-1)
 
     # Base Model
-    base_model = EfficientNetV2B0(
+    base_model = EfficientNetB6(
     include_top=True,
     weights=None,
     input_tensor=None,
