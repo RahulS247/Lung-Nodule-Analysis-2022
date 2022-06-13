@@ -1,8 +1,12 @@
 from typing import Dict, List, Optional, Tuple, Callable
 import numpy as np
 
+import tensorflow as tf
 from tensorflow.keras.preprocessing.image import ImageDataGenerator, Iterator
 
+
+np.random.seed(42)
+tf.random.set_seed(42)
 
 def _sanitize_class_balance(
     classes: List[int], class_balance: Optional[Dict[int, float]] = None

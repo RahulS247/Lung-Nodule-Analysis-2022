@@ -7,61 +7,25 @@
 #SBATCH --partition=gpu
 #SBATCH --time=03:00:00
 
-
-#runFolderID=$( date '+%s')
-#echo "${runFolderID}"
-echo_status () {
-    duration=$SECONDS
-    textVar="${section}  ($(($duration / 60))m and $(($duration % 60))s)"
-    echo $textVar
-    SECONDS=0
-}
-
-SECONDS=0
-echo "start"
-
-
 #Loading modules
-section="Loading python"
-#https://servicedesk.surf.nl/wiki/display/WIKI/Loading+modules
-module load 2021 # Why do we need this?
-module load TensorFlow/2.6.0-foss-2021a-CUDA-11.3.1 #Python/3.9.5-GCCcore-10.3.0 # load python
-#makes sure the requiret packages are installed
-#pip install --user SimpleITK --quiet
-#pip install --user numpy --quiet
-#pip install --user matplotlib --quiet
-#pip install --user tensorflow --quiet
-#pip install --user pathlib --quiet
-##TODO load the requirement.txt file instead
-echo_status
-
-
+module load 2021
+module load TensorFlow/2.6.0-foss-2021a-CUDA-11.3.1
 
 #Copy input file to scratch
-section="copying the Dataset"
 USER_DIR_NAME="LNA22_t"
-in_dir="$TMPDIR"/"$USER_DIR_NAME"/LunaDataFolder/in_dir
-mkdir -p $in_dir
-# We don't have to change the data. Therfore we dont need to have in the git nore in every project folder. One Static location is entought I Think
-cp -R "$HOME"/Data/LUNA22_prequel/ "$in_dir"
+DATA_DIR_NAME="Data"
+mkdir -p "$TMPDIR"/"$USER_DIR_NAME"/in_dir
+mkdir -p "$TMPDIR"/"$USER_DIR_NAME"/gen_data_dir
+cp -R "$HOME"/"$DATA_DIR_NAME"/LUNA22_prequel/ "$TMPDIR"/"$USER_DIR_NAME"/in_dir
+cp -R "$HOME"/"$DATA_DIR_NAME"/gen_data_dir/ "$TMPDIR"/"$USER_DIR_NAME"/gen_data_dir
+
 #Create output directory on scratch
-mkdir "$TMPDIR"/"$USER_DIR_NAME"/gen_data_dir
 mkdir "$TMPDIR"/"$USER_DIR_NAME"/output_dir
-echo_status
-echo $'\n\n------------------------\n'
-
-
-section="Run code\n"
+ 
 #Execute a Python program located in $HOME, that takes an input file and output directory as arguments.
-python "$PWD"/train.py --raw_data_dir "$in_dir"/LUNA22_prequel --out_dir "$TMPDIR"/"$USER_DIR_NAME"/output_dir --gen_data_dir "$TMPDIR"/"$USER_DIR_NAME"/gen_data_dir --problem malignancy --epochs 1
+python "$HOME"/"$USER_DIR_NAME"/Lung-Nodule-Analysis-2022/train.py --raw_data_dir "$TMPDIR"/"$USER_DIR_NAME"/in_dir/LUNA22_prequel --out_dir "$TMPDIR"/"$USER_DIR_NAME"/output_dir --gen_data_dir "$TMPDIR"/"$USER_DIR_NAME"/gen_data_dir --epochs 1 --run_name "resnet18_undersample"  --base_model "resnet18" --problem "noduletype"
+python "$HOME"/"$USER_DIR_NAME"/Lung-Nodule-Analysis-2022/train.py --raw_data_dir "$TMPDIR"/"$USER_DIR_NAME"/in_dir/LUNA22_prequel --out_dir "$TMPDIR"/"$USER_DIR_NAME"/output_dir --gen_data_dir "$TMPDIR"/"$USER_DIR_NAME"/gen_data_dir --epochs 1 --run_name "resnet18_undersample"  --base_model "resnet18" --problem "malignancy"
 
-echo_status
-
-section="save output to $PWD" 
 #Copy output directory from scratch to home
-mkdir -p "$PWD"/result/output_dir
-mkdir -p "$PWD"/result/gen_data_dir
-
-cp -r "$TMPDIR"/"$USER_DIR_NAME"/output_dir "$PWD"/result/output_dir
-cp -r "$TMPDIR"/"$USER_DIR_NAME"/gen_data_dir "$PWD"/result/gen_data_dir
-echo_status
+cp -r "$TMPDIR"/"$USER_DIR_NAME"/output_dir "$HOME"/"$USER_DIR_NAME"/Lung-Nodule-Analysis-2022/
+cp -r "$TMPDIR"/"$USER_DIR_NAME"/gen_data_dir "$HOME"/"$USER_DIR_NAME"/Lung-Nodule-Analysis-2022/
