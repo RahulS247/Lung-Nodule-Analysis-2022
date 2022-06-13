@@ -27,7 +27,7 @@ import click
 
 
 data_part_options = ["slices", 'full']
-base_model_options = ["vgg16","ResNet152","ResNet101","ResNet50"]
+base_model_options = ["vgg16","ResNet152","ResNet101","ResNet50","ffncn"]
 problem_options = ['malignancy', 'noduletype']
 
 @click.command()
@@ -408,7 +408,17 @@ def train_and_eval_network(raw_data_dir: pathlib.Path,
                     classes=num_classes,
                     classifier_activation="softmax",
                 )
+        if base_model_name == "ffncn":
+            # Try for simple network.
+            inputs = keras.Input(shape=(None, None, 3))
+            processed = keras.layers.RandomCrop(width=32, height=32)(inputs)
+            conv = keras.layers.Conv2D(filters=2, kernel_size=3)(processed)
+            pooling = keras.layers.GlobalAveragePooling2D()(conv)
+            feature = keras.layers.Dense(10)(pooling)
 
+            full_model = keras.Model(inputs, feature)
+            backbone = keras.Model(processed, conv)
+            activations = keras.Model(conv, feature)
         
 
         return model
