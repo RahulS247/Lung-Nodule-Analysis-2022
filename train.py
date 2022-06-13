@@ -14,12 +14,13 @@ from skimage.transform import rotate
 from skimage import exposure
 
 import tensorflow
+import tensorflow.keras
 from tensorflow import keras
 from tensorflow.keras import layers
 from tensorflow.keras import optimizers
 from tensorflow.keras import losses
-from tensorflow.keras.applications import VGG16, ResNet50
-from tensorflow.keras.optimizers import SGD
+from tensorflow.keras.applications import VGG16, ResNet50, EfficientNetB0
+from tensorflow.keras.optimizers import SGD, Adam
 from tensorflow.keras.losses import categorical_crossentropy
 
 from tensorflow.keras.callbacks import ModelCheckpoint, EarlyStopping, TerminateOnNaN
@@ -228,6 +229,12 @@ def main(
             / "vgg16_weights_tf_dim_ordering_tf_kernels.h5"
         )
         maybe_download_vgg16_pretrained_weights(PRETRAINED_VGG16_WEIGHTS_FILE)
+    if base_model == "efficientnetb7":
+        PRETRAINED_efficientb7_WEIGHTS_FILE = (
+          Path().absolute()
+          / "pretrained_weights"
+          / "efficientB0_weight.h5"
+        )
 
     # Load dataset
     # This method will generate a preprocessed dataset from the source data if it is not present (only needs to be done once)
@@ -374,6 +381,8 @@ def main(
     # two warnings will be raised, but these can be safely ignored.
     if base_model == 'vgg16_pretrained':
         model.load_weights(str(PRETRAINED_VGG16_WEIGHTS_FILE), by_name=True, skip_mismatch=True)
+    if base_model == 'efficientnetb7_pretrained':
+        model.load_weights(str(PRETRAINED_efficientb7_WEIGHTS_FILE), by_name=True, skip_mismatch=True)
 
     # Prepare model for training by defining the loss, optimizer, and metrics to use
     # Output labels and predictions are one-hot encoded, so we use the categorical_accuracy metric
