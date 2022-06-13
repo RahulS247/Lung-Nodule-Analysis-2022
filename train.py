@@ -98,7 +98,7 @@ import os
 @click.option(
     "--learning_rate",
     type=float,
-    default=0.003,
+    default=0.0001,
 )
 @click.option(
     "--epochs",
