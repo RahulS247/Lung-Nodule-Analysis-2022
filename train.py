@@ -18,7 +18,6 @@ from tensorflow import keras
 from tensorflow.keras import layers
 from tensorflow.keras import optimizers
 from tensorflow.keras import losses
-from tensorflow.keras.applications import VGG16, ResNet50, EfficientNetB0, ResNet101, ResNet152 
 from tensorflow.keras.optimizers import SGD, Adam
 
 from tensorflow.keras.losses import categorical_crossentropy
@@ -37,11 +36,6 @@ import click
 
 # models
 # from models.resnet import lung_model
-# from models.simple_model import lung_model
-# from models.vgg16 import lung_model
-# from models.seresnet18 import lung_model
-# from models.resnet_baseOnly import lung_model
-# from models.resnet18 import lung_model
 
 # Data generation
 from data_generators.data_gen import NoduleDataGenerator
@@ -56,7 +50,6 @@ import itertools
 import os
 
 data_part_options = ["slices", 'full']
-
 
 @click.command()
 @click.option(
@@ -261,7 +254,7 @@ def main(
         generate_if_not_present=True,
         always_generate=False,
         source_data_dir=DATA_DIRECTORY,
-        generated_data_dir=GENERATED_DATA_DIRECTORY, #Why isnt it loaded???
+        generated_data_dir=GENERATED_DATA_DIRECTORY,
     )
     inputs = full_dataset["inputs"]
     
@@ -277,10 +270,10 @@ def main(
     if problem == "noduletype":
         problem = MLProblem.nodule_type_prediction
     else:
-        problem = "malignancy"#MLProblem.malignancy_prediction
+        problem = MLProblem.malignancy_prediction
 
     # Configure problem specific parameters
-    if problem =="malignancy": #"malignancy"MLProblem.malignancy_prediction:
+    if problem == MLProblem.malignancy_prediction:
         # We made this problem a binary classification problem:
         # 0 - benign, 1 - malignant
         num_classes = 2
@@ -438,9 +431,6 @@ def main(
     summary = model.summary()
     print(summary)
 
-
-
-
     # Start actual training process
     output_model_file = (
        TRAINING_OUTPUT_DIRECTORY / base_model / get_model_name(fold_var, problem, run_name) #f"vgg16_{problem.value}_best_val_accuracy.h5"
@@ -483,10 +473,6 @@ def main(
         # batch_size=batch_size,
         steps_per_epoch=len(training_data_generator),
         class_weight=class_weight,
-    ]
-    history = model.fit(
-        training_data_generator,
-        steps_per_epoch=len(training_data_generator),
         validation_data=validation_data_generator,
         validation_steps=None,
         validation_freq=1,
