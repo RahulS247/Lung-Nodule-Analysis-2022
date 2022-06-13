@@ -15,5 +15,5 @@ module load 2021
 module load cuDNN/8.2.1.32-CUDA-11.3.1
 
 
-python train.py --problem malignancy
-python train.py --problem noduletype
+python train_vgg.py --problem malignancy
+python train_vgg.py --problem noduletype
