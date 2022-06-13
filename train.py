@@ -1,10 +1,12 @@
 import pathlib
 from pathlib import Path
+
 from typing import Tuple
 from enum import Enum, unique
 
 import numpy as np
 import matplotlib.pyplot as plt
+
 from random import sample, choice, random
 import cv2 as cv
 from skimage.util import random_noise
@@ -16,8 +18,10 @@ from tensorflow import keras
 from tensorflow.keras import layers
 from tensorflow.keras import optimizers
 from tensorflow.keras import losses
-
 from tensorflow.keras.applications import VGG16, ResNet50
+from tensorflow.keras.optimizers import SGD
+from tensorflow.keras.losses import categorical_crossentropy
+
 from tensorflow.keras.callbacks import ModelCheckpoint, EarlyStopping, TerminateOnNaN
 
 import tensorflow_addons as tfa
@@ -197,7 +201,6 @@ def main(
     elif base_model == "seresnet18":
         from models.seresnet50 import lung_model
 
-    
     tensorflow.random.set_seed(42)
     np.random.seed(42)
     # Enforce some Keras backend settings that we need
@@ -214,7 +217,7 @@ def main(
 
     # This should point at a directory to store the training output files
     TRAINING_OUTPUT_DIRECTORY = out_dir#Path().absolute()
-    
+
     # This should point at the pretrained model weights file for the VGG16 model.
     # The file can be downloaded here:
     # https://storage.googleapis.com/tensorflow/keras-applications/vgg16/vgg16_weights_tf_dim_ordering_tf_kernels.h5
@@ -239,6 +242,7 @@ def main(
         generated_data_dir=GENERATED_DATA_DIRECTORY,
     )
     inputs = full_dataset["inputs"]
+    
     input_shape = 3, input_size, input_size
 
     @unique
@@ -265,6 +269,7 @@ def main(
         # It is possible to generate training labels yourself using the raw annotations of the radiologists...
         labels_raw = full_dataset["labels_malignancy_raw"]
         classes_names = ["Benign", "Malignant"]
+
     elif problem == MLProblem.nodule_type_prediction:
         # We made this problem a multiclass classification problem with three classes:
         # 0 - non-solid, 1 - part-solid, 2 - solid
@@ -276,6 +281,7 @@ def main(
         # It is possible to generate training labels yourself using the raw annotations of the radiologists...
         labels_raw = full_dataset["labels_nodule_type_raw"]
         classes_names = ["Nonsolid", "PartSolid", "Solid"]
+
     else:
         raise NotImplementedError(f"An unknown MLProblem was specified: {problem}")
 
@@ -419,7 +425,7 @@ def main(
     n_dirs = len(os.listdir(TRAINING_OUTPUT_DIRECTORY / f"logs/{problem.value}/{base_model}"))
     logdir = TRAINING_OUTPUT_DIRECTORY / f"logs/{problem.value}/{base_model}/_{run_name}__{str(fold_var)}_run{n_dirs}"
     tensorboard_callback = keras.callbacks.TensorBoard(log_dir=logdir)
-
+    
     callbacks = [
         TerminateOnNaN(),
         ModelCheckpoint(
@@ -448,6 +454,10 @@ def main(
         # batch_size=batch_size,
         steps_per_epoch=len(training_data_generator),
         class_weight=class_weight,
+    ]
+    history = model.fit(
+        training_data_generator,
+        steps_per_epoch=len(training_data_generator),
         validation_data=validation_data_generator,
         validation_steps=None,
         validation_freq=1,
