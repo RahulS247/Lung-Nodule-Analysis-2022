@@ -11,7 +11,6 @@ from random import sample, choice, random
 import cv2 as cv
 from skimage.util import random_noise
 from skimage.transform import rotate
-from skimage import exposure
 
 import tensorflow
 import tensorflow.keras
@@ -21,6 +20,7 @@ from tensorflow.keras import optimizers
 from tensorflow.keras import losses
 from tensorflow.keras.applications import VGG16, ResNet50, EfficientNetB0
 from tensorflow.keras.optimizers import SGD, Adam
+
 from tensorflow.keras.losses import categorical_crossentropy
 
 from tensorflow.keras.callbacks import ModelCheckpoint, EarlyStopping, TerminateOnNaN
@@ -371,7 +371,7 @@ def main(
             shuffle=True,
             preprocess_fn=validation_preprocess_fn,
         )
-    
+
     # Load Model 
     model = lung_model(input_shape, num_classes)
     fold_var = 1
