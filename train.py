@@ -18,7 +18,7 @@ from tensorflow import keras
 from tensorflow.keras import layers
 from tensorflow.keras import optimizers
 from tensorflow.keras import losses
-from tensorflow.keras.applications import VGG16, ResNet50, EfficientNetB0
+from tensorflow.keras.applications import VGG16, ResNet50, EfficientNetB0, ResNet101, ResNet152 
 from tensorflow.keras.optimizers import SGD, Adam
 
 from tensorflow.keras.losses import categorical_crossentropy
@@ -28,6 +28,10 @@ from tensorflow.keras.callbacks import ModelCheckpoint, EarlyStopping, Terminate
 import tensorflow_addons as tfa
 
 from utils import maybe_download_vgg16_pretrained_weights
+
+import os
+import itertools
+import json
 
 import click
 
@@ -49,8 +53,10 @@ import sklearn
 from sklearn import metrics as skm
 
 import itertools
-
 import os
+
+data_part_options = ["slices", 'full']
+
 
 @click.command()
 @click.option(
@@ -87,6 +93,13 @@ import os
     "--base_model",
     type=str,
     default="vgg16",
+    help="The pretrained base model of the network",
+)
+#cross_slices_only#fully
+@click.option(
+    "--data_part",
+    type=click.Choice(data_part_options),
+    default="slices",
     help="The pretrained base model of the network",
 )
 @click.option(
@@ -147,6 +160,7 @@ def main(
     input_size: int,
     batch_size: int,
     base_model: str,
+    data_part:str,
     val_fraciton: float,
     problem: str,
     learning_rate: float,
@@ -239,14 +253,15 @@ def main(
     # Load dataset
     # This method will generate a preprocessed dataset from the source data if it is not present (only needs to be done once)
     # Otherwise it will quickly load the generated dataset from disk
+    cross_slices_only = (data_part=="slices")
     full_dataset = load_dataset(
         input_size=input_size,#224,
         new_spacing_mm=0.2,
-        cross_slices_only=True,
+        cross_slices_only=cross_slices_only,
         generate_if_not_present=True,
         always_generate=False,
         source_data_dir=DATA_DIRECTORY,
-        generated_data_dir=GENERATED_DATA_DIRECTORY,
+        generated_data_dir=GENERATED_DATA_DIRECTORY, #Why isnt it loaded???
     )
     inputs = full_dataset["inputs"]
     
@@ -262,10 +277,10 @@ def main(
     if problem == "noduletype":
         problem = MLProblem.nodule_type_prediction
     else:
-        problem = MLProblem.malignancy_prediction
+        problem = "malignancy"#MLProblem.malignancy_prediction
 
     # Configure problem specific parameters
-    if problem == MLProblem.malignancy_prediction:
+    if problem =="malignancy": #"malignancy"MLProblem.malignancy_prediction:
         # We made this problem a binary classification problem:
         # 0 - benign, 1 - malignant
         num_classes = 2
@@ -276,7 +291,6 @@ def main(
         # It is possible to generate training labels yourself using the raw annotations of the radiologists...
         labels_raw = full_dataset["labels_malignancy_raw"]
         classes_names = ["Benign", "Malignant"]
-
     elif problem == MLProblem.nodule_type_prediction:
         # We made this problem a multiclass classification problem with three classes:
         # 0 - non-solid, 1 - part-solid, 2 - solid
@@ -420,6 +434,12 @@ def main(
         loss=loss_fn,
         metrics=model_metrics,#["categorical_accuracy"],
     )
+    
+    summary = model.summary()
+    print(summary)
+
+
+
 
     # Start actual training process
     output_model_file = (
@@ -492,6 +512,7 @@ def main(
         TRAINING_OUTPUT_DIRECTORY / base_model / f"{run_name}_{problem.value}_conf_plot.png"
     )
     plot_confusion_matrix(conf_mat_nn, classes_names, output_conf_img_file)
+
 
     # generate a plot using the training history...
     output_history_img_file = (
