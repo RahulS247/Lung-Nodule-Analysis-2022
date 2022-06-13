@@ -164,15 +164,39 @@ def main(
         from models.vgg19 import lung_model
     elif base_model == "inceptionresnet":
         from models.inceptionResNet import lung_model
-    elif base_model == "efficientnetv0":
-        from models.efficientnetb0 import lung_model
-    elif base_model == "efficientnetv2":
-        from models.efficientnetb0v2 import lung_model
     elif base_model == "densenet":
         from models.densenet import lung_model
     elif base_model == "simplecnn":
         from models.simple_model import lung_model
-    
+    elif base_model == "efficientnetb0":
+        from models.efficientnetb0 import lung_model
+    elif base_model == "efficientnetb0v2":
+        from models.efficientnetb0v2 import lung_model
+    elif base_model == "efficientnetb1":
+        from models.efficientnetb1 import lung_model
+    elif base_model == "efficientnetb1v2":
+        from models.efficientnetb1v2 import lung_model
+    elif base_model == "efficientnetb2":
+        from models.efficientnetb2 import lung_model
+    elif base_model == "efficientnetb2v2":
+        from models.efficientnetb2v2 import lung_model
+    elif base_model == "efficientnetb3":
+        from models.efficientnetb3 import lung_model
+    elif base_model == "efficientnetb3v2":
+        from models.efficientnetb3v2 import lung_model
+    elif base_model == "efficientnetb4":
+        from models.efficientnetb4 import lung_model
+    elif base_model == "efficientnetb5":
+        from models.efficientnetb5 import lung_model
+    elif base_model == "efficientnetb6":
+        from models.efficientnetb6 import lung_model
+    elif base_model == "efficientnetb7":
+        from models.efficientnetb7 import lung_model
+    elif base_model == "seresnet50":
+        from models.seresnet18 import lung_model
+    elif base_model == "seresnet18":
+        from models.seresnet50 import lung_model
+
     
     tensorflow.random.set_seed(42)
     np.random.seed(42)
