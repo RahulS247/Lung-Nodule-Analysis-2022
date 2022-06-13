@@ -1,22 +1,32 @@
 import pathlib
+from pathlib import Path
+
 from typing import Tuple
 from enum import Enum, unique
 
 import numpy as np
 import matplotlib.pyplot as plt
 
+from random import sample, choice, random
+import cv2 as cv
+from skimage.util import random_noise
+from skimage.transform import rotate
 
 import tensorflow
+import tensorflow.keras
 from tensorflow import keras
 from tensorflow.keras import layers
+from tensorflow.keras import optimizers
+from tensorflow.keras import losses
+from tensorflow.keras.applications import VGG16, ResNet50, EfficientNetB0, ResNet101, ResNet152 
+from tensorflow.keras.optimizers import SGD, Adam
 
-from tensorflow.keras.applications import VGG16, ResNet50, ResNet101, ResNet152 
-from tensorflow.keras.optimizers import SGD
 from tensorflow.keras.losses import categorical_crossentropy
+
 from tensorflow.keras.callbacks import ModelCheckpoint, EarlyStopping, TerminateOnNaN
 
-from balanced_sampler import sample_balanced, UndersamplingIterator
-from data import load_dataset
+import tensorflow_addons as tfa
+
 from utils import maybe_download_vgg16_pretrained_weights
 
 import os
@@ -25,10 +35,28 @@ import json
 
 import click
 
+# models
+# from models.resnet import lung_model
+# from models.simple_model import lung_model
+# from models.vgg16 import lung_model
+# from models.seresnet18 import lung_model
+# from models.resnet_baseOnly import lung_model
+# from models.resnet18 import lung_model
+
+# Data generation
+from data_generators.data_gen import NoduleDataGenerator
+from balanced_sampler import sample_balanced, UndersamplingIterator
+from data import load_dataset
+from data_generators import data_augmentation as data_aug
+
+import sklearn
+from sklearn import metrics as skm
+
+import itertools
+import os
 
 data_part_options = ["slices", 'full']
-base_model_options = ["vgg16","ResNet152","ResNet101","ResNet50","ffncn"]
-problem_options = ['malignancy', 'noduletype']
+
 
 @click.command()
 @click.option(
@@ -50,13 +78,6 @@ problem_options = ['malignancy', 'noduletype']
     help="path to root folder for the output files",
 )
 @click.option(
-    "--existing_dir",
-    type=pathlib.Path,
-    default="",
-    help="check if this training combination in path allready exist in this path",
-)
-
-@click.option(
     "--input_size",
     type=int,
     default=224,
@@ -69,9 +90,9 @@ problem_options = ['malignancy', 'noduletype']
     help="The batch size for the malignancy prediction",
 )
 @click.option(
-    "--base_model_name",
-    type=click.Choice(base_model_options),
-    default=base_model_options[0],
+    "--base_model",
+    type=str,
+    default="vgg16",
     help="The pretrained base model of the network",
 )
 #cross_slices_only#fully
@@ -81,7 +102,6 @@ problem_options = ['malignancy', 'noduletype']
     default="slices",
     help="The pretrained base model of the network",
 )
-
 @click.option(
     "--val_fraciton",
     type=float,
@@ -89,7 +109,7 @@ problem_options = ['malignancy', 'noduletype']
     help="The train val split fraction",
 )
 @click.option('--problem',
-              type=click.Choice(problem_options, case_sensitive=True),
+              type=click.Choice(['malignancy', 'noduletype'], case_sensitive=True),
               required=True,
               help="If this run should consider maligancy or the nodule types",
               )
@@ -109,76 +129,92 @@ problem_options = ['malignancy', 'noduletype']
     default=0,
 )
 @click.option(
-    "--early_stop_delta",
-    type=float,
-    default=0,
+    "--kfolds",
+    type=int,
+    default=1,
 )
-@click.option('--all_combinations',  is_flag=True, help="Print more output.")
-
-
-
-
-
+@click.option(
+    "--stratified",
+    type=bool,
+    default=False
+)
+@click.option(
+    "--sample_strat",
+    type=click.Choice(['undersampling', 'normal'], case_sensitive=True),
+    default='undersampling'
+)
+@click.option(
+    "--run_name",
+    type=str,
+    default="model_1"
+)
+@click.option(
+    "--preprocessing_type",
+    type=click.Choice(['heavy', 'normal', "blur"], case_sensitive=True),
+    default="normal"
+)
 def main(
     raw_data_dir: pathlib.Path,
     gen_data_dir: pathlib.Path,
     out_dir: pathlib.Path,
-    existing_dir: pathlib.Path,
     input_size: int,
     batch_size: int,
-    base_model_name: str,
+    base_model: str,
     data_part:str,
     val_fraciton: float,
     problem: str,
     learning_rate: float,
     epochs: int,
     early_stop_delta: float,
-    all_combinations:bool = False,
-    
+    kfolds: int,
+    stratified: bool,
+    sample_strat: str,
+    run_name: str,
+    preprocessing_type: str,
 ):
-    print("all combos: ", all_combinations)
-    if(all_combinations):
-        for i in itertools.product(base_model_options, data_part_options,[problem_options[0]]):
-            print(i)
-            #main(raw_data_dir,gen_data_dir=gen_data_dir,out_dir=out_dir,existing_dir=existing_dir,input_size=input_size,batch_size=batch_size,base_model_name=i[0],data_part=i[1],val_fraciton=val_fraciton,problem=i[2],learning_rate=learning_rate,epochs=epochs,early_stop_delta=early_stop_delta, all_combinations=False)
-            try:
-                train_and_eval_network(raw_data_dir,gen_data_dir=gen_data_dir,out_dir=out_dir,existing_dir=existing_dir,input_size=input_size,batch_size=batch_size,base_model_name=i[0],data_part=i[1],val_fraciton=val_fraciton,problem=i[2],learning_rate=learning_rate,epochs=epochs,early_stop_delta=early_stop_delta)
-            except Exception as e:
-                print("found an errror:", e)
-        
-        return
-            ##check if file_naming+"_train_plot.png" already exist
-    else:
-        train_and_eval_network(raw_data_dir,gen_data_dir=gen_data_dir,out_dir=out_dir,existing_dir=existing_dir,input_size=input_size,batch_size=batch_size,base_model_name=base_model_name,data_part=data_part,val_fraciton=val_fraciton,problem=problem,learning_rate=learning_rate,epochs=epochs,early_stop_delta=early_stop_delta)
-
-
-
-def train_and_eval_network(raw_data_dir: pathlib.Path,
-    gen_data_dir: pathlib.Path,
-    out_dir: pathlib.Path,
-    existing_dir: pathlib.Path,
-    input_size: int,
-    batch_size: int,
-    base_model_name: str,
-    data_part:str,
-    val_fraciton: float,
-    problem: str,
-    learning_rate: float,
-    epochs: int,
-    early_stop_delta: float):
     
-    file_naming = f"{problem}_{base_model_name}_{data_part}"
-    
-    print("check if ",(existing_dir/(file_naming+"_train_plot.png")))
-    if(existing_dir):
-        if os.path.isfile((existing_dir/(file_naming+"_train_plot.png") )):
-            print("allready exist")
-            return
-        #print("check if ",(existing_dir/(file_naming+"_train_plot.png"), exist )
-    
-    #return
-
-
+    if base_model == "resnet18":
+        from models.resnet18 import lung_model
+    elif base_model == "resnet50":
+        from models.resnet_baseOnly import lung_model
+    elif base_model == "vgg16" or base_model == 'vgg16_pretrained':
+        from models.vgg16 import lung_model
+    elif base_model == "vgg19":
+        from models.vgg19 import lung_model
+    elif base_model == "inceptionresnet":
+        from models.inceptionResNet import lung_model
+    elif base_model == "densenet":
+        from models.densenet import lung_model
+    elif base_model == "simplecnn":
+        from models.simple_model import lung_model
+    elif base_model == "efficientnetb0":
+        from models.efficientnetb0 import lung_model
+    elif base_model == "efficientnetb0v2":
+        from models.efficientnetb0v2 import lung_model
+    elif base_model == "efficientnetb1":
+        from models.efficientnetb1 import lung_model
+    elif base_model == "efficientnetb1v2":
+        from models.efficientnetb1v2 import lung_model
+    elif base_model == "efficientnetb2":
+        from models.efficientnetb2 import lung_model
+    elif base_model == "efficientnetb2v2":
+        from models.efficientnetb2v2 import lung_model
+    elif base_model == "efficientnetb3":
+        from models.efficientnetb3 import lung_model
+    elif base_model == "efficientnetb3v2":
+        from models.efficientnetb3v2 import lung_model
+    elif base_model == "efficientnetb4":
+        from models.efficientnetb4 import lung_model
+    elif base_model == "efficientnetb5":
+        from models.efficientnetb5 import lung_model
+    elif base_model == "efficientnetb6":
+        from models.efficientnetb6 import lung_model
+    elif base_model == "efficientnetb7":
+        from models.efficientnetb7 import lung_model
+    elif base_model == "seresnet50":
+        from models.seresnet18 import lung_model
+    elif base_model == "seresnet18":
+        from models.seresnet50 import lung_model
 
     tensorflow.random.set_seed(42)
     np.random.seed(42)
@@ -200,13 +236,19 @@ def train_and_eval_network(raw_data_dir: pathlib.Path,
     # This should point at the pretrained model weights file for the VGG16 model.
     # The file can be downloaded here:
     # https://storage.googleapis.com/tensorflow/keras-applications/vgg16/vgg16_weights_tf_dim_ordering_tf_kernels.h5
-    # PRETRAINED_VGG16_WEIGHTS_FILE = (
-    #     Path().absolute()
-    #     / "pretrained_weights"
-    #     / "vgg16_weights_tf_dim_ordering_tf_kernels.h5"
-    # )
-    # maybe_download_vgg16_pretrained_weights(PRETRAINED_VGG16_WEIGHTS_FILE)
-
+    if base_model == 'vgg16_pretrained':
+        PRETRAINED_VGG16_WEIGHTS_FILE = (
+            Path().absolute()
+            / "pretrained_weights"
+            / "vgg16_weights_tf_dim_ordering_tf_kernels.h5"
+        )
+        maybe_download_vgg16_pretrained_weights(PRETRAINED_VGG16_WEIGHTS_FILE)
+    if base_model == "efficientnetb7":
+        PRETRAINED_efficientb7_WEIGHTS_FILE = (
+          Path().absolute()
+          / "pretrained_weights"
+          / "efficientB0_weight.h5"
+        )
 
     # Load dataset
     # This method will generate a preprocessed dataset from the source data if it is not present (only needs to be done once)
@@ -222,7 +264,8 @@ def train_and_eval_network(raw_data_dir: pathlib.Path,
         generated_data_dir=GENERATED_DATA_DIRECTORY, #Why isnt it loaded???
     )
     inputs = full_dataset["inputs"]
-
+    
+    input_shape = 3, input_size, input_size
 
     @unique
     class MLProblem(Enum):
@@ -232,7 +275,7 @@ def train_and_eval_network(raw_data_dir: pathlib.Path,
 
     # Here you can switch the machine learning problem to solve
     if problem == "noduletype":
-        problem =  "noduletype"#MLProblem.noduletype
+        problem = MLProblem.nodule_type_prediction
     else:
         problem = "malignancy"#MLProblem.malignancy_prediction
 
@@ -247,7 +290,8 @@ def train_and_eval_network(raw_data_dir: pathlib.Path,
         labels = full_dataset["labels_malignancy"]
         # It is possible to generate training labels yourself using the raw annotations of the radiologists...
         labels_raw = full_dataset["labels_malignancy_raw"]
-    elif problem ==  "noduletype": # MLProblem.nodule_type_prediction:
+        classes_names = ["Benign", "Malignant"]
+    elif problem == MLProblem.nodule_type_prediction:
         # We made this problem a multiclass classification problem with three classes:
         # 0 - non-solid, 1 - part-solid, 2 - solid
         num_classes = 3
@@ -257,6 +301,8 @@ def train_and_eval_network(raw_data_dir: pathlib.Path,
         labels = full_dataset["labels_nodule_type"]
         # It is possible to generate training labels yourself using the raw annotations of the radiologists...
         labels_raw = full_dataset["labels_nodule_type_raw"]
+        classes_names = ["Nonsolid", "PartSolid", "Solid"]
+
     else:
         raise NotImplementedError(f"An unknown MLProblem was specified: {problem}")
 
@@ -298,168 +344,95 @@ def train_and_eval_network(raw_data_dir: pathlib.Path,
     # It also allows us to balance the batches per class using undersampling
 
     # The following methods can be used to implement custom preprocessing/augmentation during training
+    if preprocessing_type == "normal":
+        train_preprocess_fn = data_aug.normal_train_preprocess_fn
+        validation_preprocess_fn = data_aug.validation_preprocess_fn
+    elif preprocessing_type == "blur":
+        train_preprocess_fn = data_aug.blurr_train_preprocess_fn
+        validation_preprocess_fn = data_aug.validation_preprocess_fn
+    elif preprocessing_type == "heavy":
+        train_preprocess_fn = data_aug.heavy_train_preprocess_fn
+        validation_preprocess_fn = data_aug.validation_preprocess_fn
 
-
-    def clip_and_scale(
-        data: np.ndarray, min_value: float = -1000.0, max_value: float = 400.0
-    ) -> np.ndarray:
-        data = (data - min_value) / (max_value - min_value)
-        data[data > 1] = 1.0
-        data[data < 0] = 0.0
-        return data
-
-
-    def random_flip_augmentation(
-        input_sample: np.ndarray, axis: Tuple[int, ...] = (1, 2)
-    ) -> np.ndarray:
-        for ax in axis:
-            if np.random.random_sample() > 0.5:
-                input_sample = np.flip(input_sample, axis=ax)
-        return input_sample
-
-
-    def shared_preprocess_fn(input_batch: np.ndarray) -> np.ndarray:
-        """Preprocessing that is used by both the training and validation sets during training
-
-        :param input_batch: np.ndarray [batch_size x channels x dim_x x dim_y]
-        :return: np.ndarray preprocessed batch
-        """
-        input_batch = clip_and_scale(input_batch, min_value=-1000.0, max_value=400.0)
-        # Can add more preprocessing here...
-        return input_batch
-
-
-    def train_preprocess_fn(input_batch: np.ndarray) -> np.ndarray:
-        input_batch = shared_preprocess_fn(input_batch=input_batch)
-
-        output_batch = []
-        for sample in input_batch:
-            sample = random_flip_augmentation(sample, axis=(1, 2))
-            output_batch.append(sample)
-
-        return np.array(output_batch)
-
-
-    def validation_preprocess_fn(input_batch: np.ndarray) -> np.ndarray:
-        input_batch = shared_preprocess_fn(input_batch=input_batch)
-        return input_batch
-
-    
-    def select_model(base_model_name):
-        if base_model_name == 'ResNet50':
-                base_model = ResNet50(
-                    include_top=False, #define the output of the last layers
-                    weights="imagenet",
-                    input_tensor=None,
-                    input_shape=None,
-                    pooling="avg",
-                    classes=num_classes,
-                    classifier_activation=None,#//softmax
-                )
-                ## Extended part
-                x = layers.Flatten()(base_model.output)
-                x = layers.Dense(1024, activation='relu')(x)
-                o = layers.Dense(num_classes, activation='sigmoid')(x)
-
-                model = keras.Model(inputs=base_model.input, outputs=o)
-                
-        if base_model_name == 'ResNet101':
-                base_model = ResNet101(
-                    include_top=False, #define the output of the last layers
-                    weights="imagenet",
-                    input_tensor=None,
-                    input_shape=None,
-                    pooling="avg",
-                    classes=num_classes,
-                    classifier_activation=None,#//softmax
-                )
-                ## Extended part
-                x = layers.Flatten()(base_model.output)
-                x = layers.Dense(1024, activation='relu')(x)
-                o = layers.Dense(num_classes, activation='sigmoid')(x)
-
-                model = keras.Model(inputs=base_model.input, outputs=o)
-        if base_model_name == 'ResNet152':
-                base_model = ResNet152(
-                    include_top=False, #define the output of the last layers
-                    weights="imagenet",
-                    input_tensor=None,
-                    input_shape=None,
-                    pooling="avg",
-                    classes=num_classes,
-                    classifier_activation=None,#//softmax
-                )
-                ## Extended part
-                x = layers.Flatten()(base_model.output)
-                x = layers.Dense(1024, activation='relu')(x)
-                o = layers.Dense(num_classes, activation='sigmoid')(x)
-
-                model = keras.Model(inputs=base_model.input, outputs=o)
-        if base_model_name == "vgg16":
-            # Define model
-            ## We use the VGG16 model
-            ## Base model
-            model = VGG16(
-                    include_top=True,
-                    weights=None,
-                    input_tensor=None,
-                    input_shape=None,
-                    pooling=None,
-                    classes=num_classes,
-                    classifier_activation="softmax",
-                )
-        if base_model_name == "ffncn":
-            # Try for simple network.
-            inputs = keras.Input(shape=(None, None, 3))
-            processed = keras.layers.RandomCrop(width=32, height=32)(inputs)
-            conv = keras.layers.Conv2D(filters=2, kernel_size=3)(processed)
-            pooling = keras.layers.GlobalAveragePooling2D()(conv)
-            feature = keras.layers.Dense(10)(pooling)
-
-            full_model = keras.Model(inputs, feature)
-            backbone = keras.Model(processed, conv)
-            activations = keras.Model(conv, feature)
+    if sample_strat == "undersampling":
+        training_data_generator = UndersamplingIterator(
+            training_inputs,
+            training_labels,
+            shuffle=True,
+            preprocess_fn=train_preprocess_fn,
+            batch_size=batch_size,
+        )
+        validation_data_generator = UndersamplingIterator(
+            validation_inputs,
+            validation_labels,
+            shuffle=False,
+            preprocess_fn=validation_preprocess_fn,
+            batch_size=batch_size,
+        )
+    elif sample_strat == "normal":
+        training_data_generator = NoduleDataGenerator(
+            inputs=training_inputs,
+            labels=training_labels,
+            batch_size=batch_size,
+            shuffle=True,
+            preprocess_fn=train_preprocess_fn,
+        )
         
+        validation_data_generator = NoduleDataGenerator(
+            inputs=validation_inputs,
+            labels=validation_labels,
+            batch_size=batch_size,
+            shuffle=True,
+            preprocess_fn=validation_preprocess_fn,
+        )
 
-        return model
-
-
-    training_data_generator = UndersamplingIterator(
-        training_inputs,
-        training_labels,
-        shuffle=True,
-        preprocess_fn=train_preprocess_fn,
-        batch_size=batch_size,
-    )
-    validation_data_generator = UndersamplingIterator(
-        validation_inputs,
-        validation_labels,
-        shuffle=False,
-        preprocess_fn=validation_preprocess_fn,
-        batch_size=batch_size,
-    )
-    
-
-
-    #model = keras.Model(inputs=base_model.input, outputs=o)
-    model = select_model(base_model_name)
-
-    
-
-    # Show the model layers
-    print(model.summary())
+    # Load Model 
+    model = lung_model(input_shape, num_classes)
+    fold_var = 1
 
     # Load the pretrained imagenet VGG model weights except for the last layer
     # Because the pretrained weights will have a data size mismatch in the last layer of our model
     # two warnings will be raised, but these can be safely ignored.
-    # model.load_weights(str(PRETRAINED_VGG16_WEIGHTS_FILE), by_name=True, skip_mismatch=True)
+    if base_model == 'vgg16_pretrained':
+        model.load_weights(str(PRETRAINED_VGG16_WEIGHTS_FILE), by_name=True, skip_mismatch=True)
+    if base_model == 'efficientnetb7_pretrained':
+        model.load_weights(str(PRETRAINED_efficientb7_WEIGHTS_FILE), by_name=True, skip_mismatch=True)
 
     # Prepare model for training by defining the loss, optimizer, and metrics to use
     # Output labels and predictions are one-hot encoded, so we use the categorical_accuracy metric
+    opt = optimizers.Adam(learning_rate=learning_rate)
+    opt = tfa.optimizers.Lookahead(
+        optimizer=opt,
+        sync_period=5,
+        slow_step_size=0.5
+    )
+    
+    if problem == MLProblem.malignancy_prediction:
+        loss_fn = losses.categorical_crossentropy
+        class_weight = {0:1.5, 1:0.7}
+    else:
+        loss_fn = losses.categorical_crossentropy
+        class_weight = {0:4.96, 1:10.3, 2:0.37}
+    
+    if sample_strat == "undersampling":
+        class_weight = None
+    
+    model_metrics = [
+      keras.metrics.TruePositives(name='tp'),
+      keras.metrics.FalsePositives(name='fp'),
+      keras.metrics.TrueNegatives(name='tn'),
+      keras.metrics.FalseNegatives(name='fn'), 
+      keras.metrics.CategoricalAccuracy(name='categorical_accuracy'),
+      keras.metrics.Precision(name='precision'),
+      keras.metrics.Recall(name='recall'),
+      keras.metrics.AUC(name='auc'),
+      keras.metrics.AUC(name='prc', curve='PR'), # precision-recall curve
+    ]
+    
     model.compile(
-        optimizer=SGD(learning_rate=learning_rate, momentum=0.8, nesterov=True),
-        loss=categorical_crossentropy,
-        metrics=["categorical_accuracy"],
+        optimizer=opt,#optimizers.SGD(learning_rate=learning_rate, momentum=0.8, nesterov=True),
+        loss=loss_fn,
+        metrics=model_metrics,#["categorical_accuracy"],
     )
     
     summary = model.summary()
@@ -470,8 +443,18 @@ def train_and_eval_network(raw_data_dir: pathlib.Path,
 
     # Start actual training process
     output_model_file = (
-        TRAINING_OUTPUT_DIRECTORY / (file_naming+"best_val_accuracy.h5")
+       TRAINING_OUTPUT_DIRECTORY / base_model / get_model_name(fold_var, problem, run_name) #f"vgg16_{problem.value}_best_val_accuracy.h5"
     )
+    
+    p = pathlib.Path(TRAINING_OUTPUT_DIRECTORY / f"logs/{problem.value}/{base_model}")
+    p.mkdir(parents=True, exist_ok=True)
+    omf = pathlib.Path(TRAINING_OUTPUT_DIRECTORY / base_model)
+    omf.mkdir(parents=True, exist_ok=True)
+    
+    n_dirs = len(os.listdir(TRAINING_OUTPUT_DIRECTORY / f"logs/{problem.value}/{base_model}"))
+    logdir = TRAINING_OUTPUT_DIRECTORY / f"logs/{problem.value}/{base_model}/_{run_name}__{str(fold_var)}_run{n_dirs}"
+    tensorboard_callback = keras.callbacks.TensorBoard(log_dir=logdir)
+    
     callbacks = [
         TerminateOnNaN(),
         ModelCheckpoint(
@@ -490,6 +473,16 @@ def train_and_eval_network(raw_data_dir: pathlib.Path,
             patience=100,
             verbose=1,
         ),
+        tensorboard_callback
+    ]
+    
+    history = model.fit(
+        training_data_generator,
+        # x=training_inputs,
+        # y=training_labels,
+        # batch_size=batch_size,
+        steps_per_epoch=len(training_data_generator),
+        class_weight=class_weight,
     ]
     history = model.fit(
         training_data_generator,
@@ -500,13 +493,30 @@ def train_and_eval_network(raw_data_dir: pathlib.Path,
         epochs=epochs,
         callbacks=callbacks,
         verbose=2,
+        shuffle=True,
     )
-
+    
+    #Load best model
+    model.load_weights(output_model_file)
+    
+    # Conf matrix
+    y_val_auto = model.predict(validation_data_generator)
+    print(validation_labels.shape, y_val_auto.shape)
+    print(validation_labels.argmax(axis=1).shape, y_val_auto.argmax(axis=1).shape)
+    print("IMAGE")
+    print(np.max(training_data_generator.__getitem__(0)[0]))
+    conf_mat_nn = skm.confusion_matrix(validation_labels.argmax(axis=1), y_val_auto.argmax(axis=1))
+    acc_nn = skm.accuracy_score(validation_labels.argmax(axis=1), y_val_auto.argmax(axis=1))
+    print("vall acc:", acc_nn)
+    output_conf_img_file = (
+        TRAINING_OUTPUT_DIRECTORY / base_model / f"{run_name}_{problem.value}_conf_plot.png"
+    )
+    plot_confusion_matrix(conf_mat_nn, classes_names, output_conf_img_file)
 
 
     # generate a plot using the training history...
     output_history_img_file = (
-        TRAINING_OUTPUT_DIRECTORY / (file_naming+"_train_plot.png")
+        TRAINING_OUTPUT_DIRECTORY / base_model / f"{run_name}_{problem.value}_train_plot.png"
     )
     print(f"Saving training plot to: {output_history_img_file}")
     plt.plot(history.history["categorical_accuracy"])
@@ -519,11 +529,29 @@ def train_and_eval_network(raw_data_dir: pathlib.Path,
     plt.legend(["Accuracy", "Validation Accuracy", "loss", "Validation Loss"])
     plt.savefig(str(output_history_img_file), bbox_inches="tight")
 
-    print(history.history.keys())
+def get_model_name(fold_var, problem, run_name):
+    return f"{run_name}_{problem.value}_{str(fold_var)}_best_vall_acc.h5"
 
-    output_history_file=( TRAINING_OUTPUT_DIRECTORY / (str(max(history.history['val_categorical_accuracy']))+file_naming+"_hist.json"))
-    #str(max(history.history['val_categorical_accuracy']))+
-    json.dump(history.history, open(output_history_file, 'w'), indent=4)
+def plot_confusion_matrix(conf_mat, classes, outfile,title='Confusion Matrix', cmap=plt.cm.Blues,):
+    """
+    This function prints and plots the confusion matrix
+    """
+    plt.imshow(conf_mat, interpolation='nearest', cmap=cmap)
+    plt.title(title)
+    plt.colorbar()
+    tick_marks = np.arange(len(classes))
+    plt.xticks(tick_marks, classes, rotation=90)
+    plt.yticks(tick_marks, classes)
+
+    thresh = conf_mat.max() / 2.
+    for i, j in itertools.product(range(conf_mat.shape[0]), range(conf_mat.shape[1])):
+        plt.text(j, i, conf_mat[i, j], horizontalalignment="center",
+                 color="white" if conf_mat[i, j] > thresh else "black")
+
+    plt.tight_layout()
+    plt.ylabel('True label')
+    plt.xlabel('Predicted label')
+    plt.savefig(str(outfile), bbox_inches="tight")
 
 if __name__ == "__main__":
     main()
