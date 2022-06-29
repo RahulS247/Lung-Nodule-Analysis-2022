@@ -11,7 +11,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 import tensorflow.keras
-from tensorflow.keras.applications import VGG16, ResNet50, EfficientNetB0
+from tensorflow.keras.applications import VGG19, ResNet50, EfficientNetB0
 from tensorflow.keras.optimizers import SGD, Adam
 from tensorflow.keras.losses import categorical_crossentropy
 from tensorflow.keras.callbacks import ModelCheckpoint, EarlyStopping, TerminateOnNaN
@@ -48,18 +48,18 @@ def main(problem: str):
     
 
     #downloading weight resnet50
-    #model_resnet50 = ResNet50(include_top=True, weights="imagenet", input_tensor=None, input_shape=None, pooling=None, classes=1000, classifier_activation="softmax")
+    model_VGG19 = VGG19(include_top=True, weights="imagenet", input_tensor=None, input_shape=None, pooling=None, classes=1000, classifier_activation="softmax")
     #model_efficientb0 = EfficientNetB0(include_top=True, weights="imagenet", input_tensor=None, input_shape=None, pooling=None, classes=1000, classifier_activation="softmax")
     #model_res50.summary()
 
 
 
-    #model_resnet50.save('pretrained_weights/resnet50_weights.h5')
+    model_VGG19.save('pretrained_weights/VGG19_weights.h5')
 
     PRETRAINED_resnet50_WEIGHTS_FILE = (
         Path().absolute()
         / "pretrained_weights"
-        / "resnet50_weights.h5"
+        / "VGG19_weights.h5"
     )
 
 
@@ -67,12 +67,12 @@ def main(problem: str):
     # This should point at the pretrained model weights file for the VGG16 model.
     # The file can be downloaded here:
     # https://storage.googleapis.com/tensorflow/keras-applications/vgg16/vgg16_weights_tf_dim_ordering_tf_kernels.h5
-    PRETRAINED_VGG16_WEIGHTS_FILE = (
-        Path().absolute()
-        / "pretrained_weights"
-        / "vgg16_weights_tf_dim_ordering_tf_kernels.h5"
-    )
-    maybe_download_vgg16_pretrained_weights(PRETRAINED_VGG16_WEIGHTS_FILE)
+    # PRETRAINED_VGG16_WEIGHTS_FILE = (
+    #     Path().absolute()
+    #     / "pretrained_weights"
+    #     / "vgg16_weights_tf_dim_ordering_tf_kernels.h5"
+    # )
+    # maybe_download_vgg16_pretrained_weights(PRETRAINED_VGG16_WEIGHTS_FILE)
 
 
     # Load dataset
@@ -188,7 +188,7 @@ def main(problem: str):
 
     def rotation_augmentation(input_sample: np.ndarray    
                                 ) -> np.ndarray:
-        if np.random.random_sample() > 0.7:
+        if np.random.random_sample() > 0.5:
             angles = [45,90,135,180,225,270,315]
             angle = sample(angles,1)[0]
             input_sample = transform.rotate(input_sample, angle)        
@@ -246,7 +246,7 @@ def main(problem: str):
 
 
     # We use the VGG16 model
-    model = VGG16(
+    model = VGG19(
         include_top=True,
         weights=None,
         input_tensor=None,
@@ -263,7 +263,7 @@ def main(problem: str):
     # Load the pretrained imagenet VGG model weights except for the last layer
     # Because the pretrained weights will have a data size mismatch in the last layer of our model
     # two warnings will be raised, but these can be safely ignored.
-    model.load_weights(str(PRETRAINED_VGG16_WEIGHTS_FILE), by_name=True, skip_mismatch=True)
+    model.load_weights(str(PRETRAINED_resnet50_WEIGHTS_FILE), by_name=True, skip_mismatch=True)
 
     # Prepare model for training by defining the loss, optimizer, and metrics to use
     # Output labels and predictions are one-hot encoded, so we use the categorical_accuracy metric
@@ -275,7 +275,7 @@ def main(problem: str):
 
     # Start actual training process
     output_model_file = (
-        TRAINING_OUTPUT_DIRECTORY / f"vgg16_adam_classbal_aug07_{problem.value}_best_val_accuracy.h5"
+        TRAINING_OUTPUT_DIRECTORY / f"vgg19_adam_aug_{problem.value}_best_val_accuracy.h5"
     )
     callbacks = [
         TerminateOnNaN(),
@@ -312,7 +312,7 @@ def main(problem: str):
 
     # generate a plot using the training history...
     output_history_img_file = (
-        TRAINING_OUTPUT_DIRECTORY / f"vgg16_adam_classbal_aug07_{problem.value}_train_plot.png"
+        TRAINING_OUTPUT_DIRECTORY / f"vgg19_adam_aug_{problem.value}_train_plot.png"
     )
     print(f"Saving training plot to: {output_history_img_file}")
     plt.plot(history.history["categorical_accuracy"])
