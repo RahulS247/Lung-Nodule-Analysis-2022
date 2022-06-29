@@ -11,7 +11,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 import tensorflow.keras
-from tensorflow.keras.applications import VGG16, ResNet50, EfficientNetB0
+from tensorflow.keras.applications import VGG16, ResNet50, EfficientNetV2B0
 from tensorflow.keras.optimizers import SGD, Adam
 from tensorflow.keras.losses import categorical_crossentropy
 from tensorflow.keras.callbacks import ModelCheckpoint, EarlyStopping, TerminateOnNaN
@@ -48,18 +48,18 @@ def main(problem: str):
     
 
     #downloading weight resnet50
-    model_resnet50 = ResNet50(include_top=True, weights="imagenet", input_tensor=None, input_shape=None, pooling=None, classes=1000, classifier_activation="softmax")
-    #model_efficientb0 = EfficientNetB0(include_top=True, weights="imagenet", input_tensor=None, input_shape=None, pooling=None, classes=1000, classifier_activation="softmax")
+    #model_resnet50 = ResNet50(include_top=True, weights="imagenet", input_tensor=None, input_shape=None, pooling=None, classes=1000, classifier_activation="softmax")
+    model_efficientv2b0 = EfficientNetV2B0(include_top=True, weights="imagenet", input_tensor=None, input_shape=None, pooling=None, classes=1000, classifier_activation="softmax")
     #model_res50.summary()
 
 
 
-    model_resnet50.save('pretrained_weights/resnet50_weights.h5')
+    model_efficientv2b0.save('pretrained_weights/model_efficientv2b0_weights.h5')
 
     PRETRAINED_resnet50_WEIGHTS_FILE = (
         Path().absolute()
         / "pretrained_weights"
-        / "resnet50_weights.h5"
+        / "model_efficientv2b0_weights.h5"
     )
 
 
@@ -67,12 +67,12 @@ def main(problem: str):
     # This should point at the pretrained model weights file for the VGG16 model.
     # The file can be downloaded here:
     # https://storage.googleapis.com/tensorflow/keras-applications/vgg16/vgg16_weights_tf_dim_ordering_tf_kernels.h5
-    PRETRAINED_VGG16_WEIGHTS_FILE = (
-        Path().absolute()
-        / "pretrained_weights"
-        / "vgg16_weights_tf_dim_ordering_tf_kernels.h5"
-    )
-    maybe_download_vgg16_pretrained_weights(PRETRAINED_VGG16_WEIGHTS_FILE)
+    # PRETRAINED_VGG16_WEIGHTS_FILE = (
+    #     Path().absolute()
+    #     / "pretrained_weights"
+    #     / "vgg16_weights_tf_dim_ordering_tf_kernels.h5"
+    # )
+    # maybe_download_vgg16_pretrained_weights(PRETRAINED_VGG16_WEIGHTS_FILE)
 
 
     # Load dataset
@@ -246,7 +246,7 @@ def main(problem: str):
 
 
     # We use the VGG16 model
-    model = ResNet50(
+    model = EfficientNetV2B0(
         include_top=True,
         weights=None,
         input_tensor=None,
@@ -275,7 +275,7 @@ def main(problem: str):
 
     # Start actual training process
     output_model_file = (
-        TRAINING_OUTPUT_DIRECTORY / f"resnet50_classbal_noise_{problem.value}_best_val_accuracy.h5"
+        TRAINING_OUTPUT_DIRECTORY / f"EfficientNetV2B0_classbal_aug_{problem.value}_best_val_accuracy.h5"
     )
     callbacks = [
         TerminateOnNaN(),
@@ -312,7 +312,7 @@ def main(problem: str):
 
     # generate a plot using the training history...
     output_history_img_file = (
-        TRAINING_OUTPUT_DIRECTORY / f"resnet50__classbal_noise_{problem.value}_train_plot.png"
+        TRAINING_OUTPUT_DIRECTORY / f"EfficientNetV2B0_classbal_aug_{problem.value}_train_plot.png"
     )
     print(f"Saving training plot to: {output_history_img_file}")
     plt.plot(history.history["categorical_accuracy"])
