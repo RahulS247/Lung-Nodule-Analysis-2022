@@ -217,7 +217,7 @@ def main(problem: str):
         output_batch = []
         for sample in input_batch:
             sample = random_flip_augmentation(sample, axis=(1,2))
-            sample = rotation_augmentation(sample)
+            #sample = rotation_augmentation(sample)
             #sample = add_noise_augmentation(sample)
             output_batch.append(sample)
 
@@ -275,7 +275,7 @@ def main(problem: str):
 
     # Start actual training process
     output_model_file = (
-        TRAINING_OUTPUT_DIRECTORY / f"vgg19_adam_aug_{problem.value}_best_val_accuracy.h5"
+        TRAINING_OUTPUT_DIRECTORY / f"vgg19_adam_{problem.value}_best_val_accuracy.h5"
     )
     callbacks = [
         TerminateOnNaN(),
@@ -312,7 +312,7 @@ def main(problem: str):
 
     # generate a plot using the training history...
     output_history_img_file = (
-        TRAINING_OUTPUT_DIRECTORY / f"vgg19_adam_aug_{problem.value}_train_plot.png"
+        TRAINING_OUTPUT_DIRECTORY / f"vgg19_adam_{problem.value}_train_plot.png"
     )
     print(f"Saving training plot to: {output_history_img_file}")
     plt.plot(history.history["categorical_accuracy"])
